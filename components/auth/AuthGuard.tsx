@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter, useSegments } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -13,6 +13,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const { isAuthenticated, loading } = useAuth();
   const router = useRouter();
   const segments = useSegments();
+  const [hasNavigated, setHasNavigated] = useState(false);
 
   useEffect(() => {
     if (loading) {
@@ -34,25 +35,39 @@ export function AuthGuard({ children }: AuthGuardProps) {
       segments: segments.join('/'),
       inAuthGroup,
       inProtectedRoute,
-      loading
+      loading,
+      hasNavigated
     });
+
+    // Reset navigation flag when auth state changes
+    if (!loading) {
+      setHasNavigated(false);
+    }
 
     if (!isAuthenticated) {
       // User is not authenticated
-      if (inProtectedRoute) {
+      if (inProtectedRoute && !hasNavigated) {
         // Redirect to auth if trying to access protected routes
         console.log('🔄 AuthGuard: Redirecting to auth - user not authenticated');
-        router.replace('/(auth)/welcome');
+        setHasNavigated(true);
+        // Use a small delay to ensure state is properly updated
+        setTimeout(() => {
+          router.replace('/(auth)/welcome');
+        }, 100);
       }
     } else {
       // User is authenticated
-      if (inAuthGroup) {
+      if (inAuthGroup && !hasNavigated) {
         // Redirect to main app if trying to access auth routes
         console.log('🔄 AuthGuard: Redirecting to tabs - user authenticated');
-        router.replace('/(tabs)');
+        setHasNavigated(true);
+        // Use a small delay to ensure state is properly updated
+        setTimeout(() => {
+          router.replace('/(tabs)');
+        }, 100);
       }
     }
-  }, [isAuthenticated, loading, segments, router]);
+  }, [isAuthenticated, loading, segments, router, hasNavigated]);
 
   if (loading) {
     return (

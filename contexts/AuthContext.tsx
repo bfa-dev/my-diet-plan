@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import * as SecureStore from 'expo-secure-store';
@@ -96,7 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Clear all stored tokens
-  const clearStoredTokens = async () => {
+  const clearStoredTokens = useCallback(async () => {
     try {
       console.log('🧹 Clearing all stored tokens...');
       await removeStorageItem('supabase.auth.token');
@@ -115,7 +115,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.warn('⚠️ Error clearing stored tokens:', error);
     }
-  };
+  }, []);
+
+  // Clear auth state immediately
+  const clearAuthState = useCallback(() => {
+    console.log('🧹 Clearing auth state immediately...');
+    setSession(null);
+    setUser(null);
+    console.log('✅ Auth state cleared');
+  }, []);
 
   // Mock authentication functions for development
   const mockSignIn = async (email: string, password: string) => {
@@ -140,18 +148,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return mockSignIn(email, password);
   };
 
-  const mockSignOut = async () => {
+  const mockSignOut = useCallback(async () => {
     console.log('🔧 Mock sign out - clearing state and storage');
     
-    // Clear state immediately
-    setSession(null);
-    setUser(null);
+    // Clear state immediately for instant UI update
+    clearAuthState();
     
     // Clear storage
     await clearStoredTokens();
     
     console.log('✅ Mock sign out completed');
-  };
+  }, [clearAuthState, clearStoredTokens]);
 
   // Check for stored mock session
   const checkMockSession = async () => {
@@ -245,8 +252,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (mounted) {
             if (event === 'SIGNED_OUT' || !session) {
               console.log('🚪 User signed out or session invalid');
-              setSession(null);
-              setUser(null);
+              clearAuthState();
               await clearStoredTokens();
             } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
               console.log('🔑 User signed in or token refreshed');
@@ -267,7 +273,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       setMounted(false);
     };
-  }, []);
+  }, [clearStoredTokens, clearAuthState, mounted]);
 
   const signInWithEmail = async (email: string, password: string) => {
     if (!isSupabaseConfigured) {
@@ -362,7 +368,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     try {
       console.log('🚪 AuthContext: Starting sign out process...');
       
@@ -374,15 +380,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       // For Supabase, clear local state first to ensure immediate UI update
-      console.log('🧹 AuthContext: Clearing local auth state...');
-      setSession(null);
-      setUser(null);
+      console.log('🧹 AuthContext: Clearing local auth state immediately...');
+      clearAuthState();
       
       // Clear stored tokens
       console.log('🗑️ AuthContext: Clearing stored tokens...');
       await clearStoredTokens();
       
-      // Sign out from Supabase
+      // Sign out from Supabase (this will trigger the auth state change listener)
       console.log('🔐 AuthContext: Signing out from Supabase...');
       const { error } = await supabase.auth.signOut();
       
@@ -397,12 +402,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('❌ AuthContext: Error in signOut:', error);
       // Even if there's an error, ensure local state is cleared
-      setSession(null);
-      setUser(null);
+      clearAuthState();
       await clearStoredTokens();
       console.log('🧹 AuthContext: Local state cleared despite error');
     }
-  };
+  }, [mockSignOut, clearAuthState, clearStoredTokens]);
 
   const value = {
     session,
