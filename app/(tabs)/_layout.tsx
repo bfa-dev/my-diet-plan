@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Chrome as Home, ShoppingBag as ShoppingList, User, BookOpen } from 'lucide-react-native';
+import { Chrome as Home, ShoppingBag as ShoppingList, User, BookOpen, TrendingUp } from 'lucide-react-native';
 
 export default function TabLayout() {
   return (
@@ -46,6 +46,15 @@ export default function TabLayout() {
           title: 'Alışveriş',
           tabBarIcon: ({ size, color }) => (
             <ShoppingList size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="progress"
+        options={{
+          title: 'İlerleme',
+          tabBarIcon: ({ size, color }) => (
+            <TrendingUp size={size} color={color} />
           ),
         }}
       />

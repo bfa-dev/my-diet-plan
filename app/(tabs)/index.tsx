@@ -7,6 +7,7 @@ import { MealCard } from '@/components/MealCard';
 import { MealSwapModal } from '@/components/MealSwapModal';
 import { WeeklyProgress } from '@/components/WeeklyProgress';
 import { NutritionSummary } from '@/components/NutritionSummary';
+import { DailyHabits } from '@/components/DailyHabits';
 import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -247,6 +248,8 @@ export default function HomeTab() {
           totalDays={currentMealPlan.dailyMeals.length} 
           currentStreak={3} 
         />
+
+        <DailyHabits />
 
         <View style={styles.dateNavigation}>
           <TouchableOpacity 
