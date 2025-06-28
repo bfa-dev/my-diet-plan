@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ChevronLeft, ChevronRight, Plus, Calendar, PieChart } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Plus, Calendar, ChartPie as PieChart } from 'lucide-react-native';
 import { MealCard } from '@/components/MealCard';
 import { WeeklyProgress } from '@/components/WeeklyProgress';
 import { NutritionSummary } from '@/components/NutritionSummary';
