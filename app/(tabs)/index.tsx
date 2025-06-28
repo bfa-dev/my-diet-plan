@@ -1,27 +1,59 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, ChevronRight, Plus, Calendar } from 'lucide-react-native';
-import { mockMealPlan, mockRecipes } from '@/data/mockData';
 import { MealCard } from '@/components/MealCard';
 import { WeeklyProgress } from '@/components/WeeklyProgress';
 import { NutritionSummary } from '@/components/NutritionSummary';
 import { Button } from '@/components/ui/Button';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { useAuth } from '@/contexts/AuthContext';
+import { useApi } from '@/hooks/useApi';
+import { recipeApi, mealPlanApi } from '@/lib/api';
+import { Recipe, MealPlan } from '@/types';
 
 export default function HomeTab() {
   const router = useRouter();
+  const { user } = useAuth();
   const [currentDayIndex, setCurrentDayIndex] = useState(0);
 
-  const currentDay = mockMealPlan.dailyMeals[currentDayIndex];
-  const breakfastRecipe = mockRecipes.find(r => r.recipeID === currentDay.breakfast);
-  const lunchRecipe = mockRecipes.find(r => r.recipeID === currentDay.lunch);
-  const dinnerRecipe = mockRecipes.find(r => r.recipeID === currentDay.dinner);
+  // Fetch user's meal plans
+  const {
+    data: mealPlans,
+    loading: mealPlansLoading,
+    error: mealPlansError,
+    refetch: refetchMealPlans
+  } = useApi(
+    () => mealPlanApi.getUserMealPlans(user?.id || ''),
+    [user?.id]
+  );
+
+  // Fetch all recipes
+  const {
+    data: recipes,
+    loading: recipesLoading,
+    error: recipesError
+  } = useApi(
+    () => recipeApi.getAllRecipes(),
+    []
+  );
+
+  // Get current meal plan (most recent one)
+  const currentMealPlan = mealPlans?.[0];
+  const currentDay = currentMealPlan?.dailyMeals[currentDayIndex];
+
+  // Find recipes for current day
+  const breakfastRecipe = recipes?.find(r => r.recipeID === currentDay?.breakfast);
+  const lunchRecipe = recipes?.find(r => r.recipeID === currentDay?.lunch);
+  const dinnerRecipe = recipes?.find(r => r.recipeID === currentDay?.dinner);
 
   const navigateDay = (direction: 'prev' | 'next') => {
+    if (!currentMealPlan) return;
+    
     if (direction === 'prev' && currentDayIndex > 0) {
       setCurrentDayIndex(currentDayIndex - 1);
-    } else if (direction === 'next' && currentDayIndex < mockMealPlan.dailyMeals.length - 1) {
+    } else if (direction === 'next' && currentDayIndex < currentMealPlan.dailyMeals.length - 1) {
       setCurrentDayIndex(currentDayIndex + 1);
     }
   };
@@ -51,6 +83,65 @@ export default function HomeTab() {
     targetFat: 60,
   };
 
+  // Loading state
+  if (mealPlansLoading || recipesLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <LoadingSpinner size={32} color="#8FBC8F" />
+          <Text style={styles.loadingText}>Planınız yükleniyor...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Error state
+  if (mealPlansError || recipesError) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorTitle}>Bir hata oluştu</Text>
+          <Text style={styles.errorText}>
+            {mealPlansError || recipesError}
+          </Text>
+          <Button
+            title="Tekrar Dene"
+            onPress={() => {
+              refetchMealPlans();
+            }}
+            style={styles.retryButton}
+          />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // No meal plan state
+  if (!currentMealPlan) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.welcomeText}>Merhaba! 👋</Text>
+            <Text style={styles.headerTitle}>Beslenme Planınız</Text>
+          </View>
+        </View>
+
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyTitle}>Henüz bir planınız yok</Text>
+          <Text style={styles.emptyText}>
+            Size özel beslenme planı oluşturmak için başlayalım!
+          </Text>
+          <Button
+            title="Yeni Plan Oluştur"
+            onPress={() => router.push('/plan-generator')}
+            style={styles.createPlanButton}
+          />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -69,7 +160,7 @@ export default function HomeTab() {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <WeeklyProgress 
           completedDays={currentDayIndex + 1} 
-          totalDays={7} 
+          totalDays={currentMealPlan.dailyMeals.length} 
           currentStreak={3} 
         />
 
@@ -87,11 +178,11 @@ export default function HomeTab() {
           </View>
           
           <TouchableOpacity 
-            style={[styles.navButton, currentDayIndex === mockMealPlan.dailyMeals.length - 1 && styles.navButtonDisabled]}
+            style={[styles.navButton, currentDayIndex === currentMealPlan.dailyMeals.length - 1 && styles.navButtonDisabled]}
             onPress={() => navigateDay('next')}
-            disabled={currentDayIndex === mockMealPlan.dailyMeals.length - 1}
+            disabled={currentDayIndex === currentMealPlan.dailyMeals.length - 1}
           >
-            <ChevronRight size={20} color={currentDayIndex === mockMealPlan.dailyMeals.length - 1 ? "#D1D5DB" : "#6B7280"} />
+            <ChevronRight size={20} color={currentDayIndex === currentMealPlan.dailyMeals.length - 1 ? "#D1D5DB" : "#6B7280"} />
           </TouchableOpacity>
         </View>
 
@@ -185,6 +276,67 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 24,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  loadingText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Medium',
+    color: '#6B7280',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontFamily: 'Inter-SemiBold',
+    color: '#EF4444',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  errorText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 24,
+  },
+  retryButton: {
+    paddingHorizontal: 32,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  emptyTitle: {
+    fontSize: 24,
+    fontFamily: 'Inter-Bold',
+    color: '#1F2937',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 24,
+  },
+  createPlanButton: {
+    paddingHorizontal: 32,
   },
   dateNavigation: {
     flexDirection: 'row',

@@ -1,12 +1,14 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { authApi } from '@/lib/api';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 interface AuthContextType {
   session: Session | null;
   user: User | null;
+  userProfile: any | null;
   loading: boolean;
   isAuthenticated: boolean;
   signInWithEmail: (email: string, password: string) => Promise<{ error: any }>;
@@ -15,6 +17,7 @@ interface AuthContextType {
   signInWithGoogle: () => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: any }>;
+  refreshUserProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -52,6 +55,7 @@ const createMockSession = (user: User): Session => ({
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
 
@@ -122,8 +126,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     console.log('🧹 Clearing auth state immediately...');
     setSession(null);
     setUser(null);
+    setUserProfile(null);
     console.log('✅ Auth state cleared');
   }, []);
+
+  // Refresh user profile
+  const refreshUserProfile = useCallback(async () => {
+    if (!user?.id) return;
+
+    try {
+      const { data: profile } = await authApi.ensureUserProfile(user);
+      setUserProfile(profile);
+    } catch (error) {
+      console.warn('Error refreshing user profile:', error);
+    }
+  }, [user]);
 
   // Mock authentication functions for development
   const mockSignIn = async (email: string, password: string) => {
@@ -137,6 +154,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       setSession(mockSession);
       setUser(mockUser);
+      
+      // Get or create user profile
+      const { data: profile } = await authApi.ensureUserProfile(mockUser);
+      setUserProfile(profile);
+      
       return { error: null };
     } catch (error) {
       return { error: { message: 'Mock sign in failed' } };
@@ -144,8 +166,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const mockSignUp = async (email: string, password: string, metadata?: any) => {
-    // For mock, just sign in the user
-    return mockSignIn(email, password);
+    try {
+      const mockUser = createMockUser(email);
+      const mockSession = createMockSession(mockUser);
+      
+      // Store mock session and user
+      await setStorageItem('mock.auth.session', JSON.stringify(mockSession));
+      await setStorageItem('mock.auth.user', JSON.stringify(mockUser));
+      
+      setSession(mockSession);
+      setUser(mockUser);
+      
+      // Create user profile with metadata
+      const { data: profile } = await authApi.handleUserSignUp(mockUser, metadata);
+      setUserProfile(profile);
+      
+      return { error: null };
+    } catch (error) {
+      return { error: { message: 'Mock sign up failed' } };
+    }
   };
 
   const mockSignOut = useCallback(async () => {
@@ -175,6 +214,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (storedSession.expires_at && storedSession.expires_at > now) {
           setSession(storedSession);
           setUser(storedUser);
+          
+          // Get user profile
+          const { data: profile } = await authApi.ensureUserProfile(storedUser);
+          setUserProfile(profile);
+          
           return true;
         } else {
           // Session expired, clear it
@@ -219,14 +263,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             await clearStoredTokens();
             setSession(null);
             setUser(null);
+            setUserProfile(null);
           } else if (session) {
             console.log('✅ Valid Supabase session found:', session.user?.email);
             setSession(session);
             setUser(session.user);
+            
+            // Get user profile
+            const { data: profile } = await authApi.ensureUserProfile(session.user);
+            setUserProfile(profile);
           } else {
             console.log('❌ No Supabase session found');
             setSession(null);
             setUser(null);
+            setUserProfile(null);
           }
           setLoading(false);
         }
@@ -236,6 +286,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           await clearStoredTokens();
           setSession(null);
           setUser(null);
+          setUserProfile(null);
           setLoading(false);
         }
       }
@@ -258,6 +309,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               console.log('🔑 User signed in or token refreshed');
               setSession(session);
               setUser(session?.user ?? null);
+              
+              // Get user profile
+              if (session?.user) {
+                const { data: profile } = await authApi.ensureUserProfile(session.user);
+                setUserProfile(profile);
+              }
             }
             setLoading(false);
           }
@@ -297,6 +354,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('✅ Supabase sign in successful:', data.user.email);
         setSession(data.session);
         setUser(data.user);
+        
+        // Get user profile
+        const { data: profile } = await authApi.ensureUserProfile(data.user);
+        setUserProfile(profile);
+        
         return { error: null };
       } else {
         console.warn('⚠️ Supabase sign in returned no session/user');
@@ -331,10 +393,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       console.log('✅ Supabase sign up successful:', data.user?.email);
       
-      // If user is immediately confirmed, set session
+      // If user is immediately confirmed, set session and create profile
       if (data.session && data.user) {
         setSession(data.session);
         setUser(data.user);
+        
+        // Create user profile
+        const { data: profile } = await authApi.handleUserSignUp(data.user, metadata);
+        setUserProfile(profile);
       }
       
       return { error: null };
@@ -411,6 +477,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = {
     session,
     user,
+    userProfile,
     loading,
     isAuthenticated,
     signInWithEmail,
@@ -419,6 +486,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signInWithGoogle,
     signOut,
     resetPassword,
+    refreshUserProfile,
   };
 
   return (

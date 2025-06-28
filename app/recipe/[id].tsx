@@ -2,18 +2,54 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'rea
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Clock, ChefHat, Flame, Users } from 'lucide-react-native';
-import { mockRecipes } from '@/data/mockData';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { useApi } from '@/hooks/useApi';
+import { recipeApi } from '@/lib/api';
 
 export default function RecipeDetail() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   
-  const recipe = mockRecipes.find(r => r.recipeID === id);
+  // Fetch recipe by ID
+  const {
+    data: recipe,
+    loading,
+    error
+  } = useApi(
+    () => recipeApi.getRecipeById(id as string),
+    [id]
+  );
 
-  if (!recipe) {
+  // Loading state
+  if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <Text>Tarif bulunamadı</Text>
+        <View style={styles.loadingContainer}>
+          <LoadingSpinner size={32} color="#8FBC8F" />
+          <Text style={styles.loadingText}>Tarif yükleniyor...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Error or not found state
+  if (error || !recipe) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <ArrowLeft size={20} color="#1F2937" />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorTitle}>Tarif bulunamadı</Text>
+          <Text style={styles.errorText}>
+            {error || 'Aradığınız tarif mevcut değil.'}
+          </Text>
+        </View>
       </SafeAreaView>
     );
   }
@@ -26,7 +62,7 @@ export default function RecipeDetail() {
         <View style={styles.imageContainer}>
           <Image source={{ uri: recipe.photoURL }} style={styles.recipeImage} />
           <TouchableOpacity 
-            style={styles.backButton}
+            style={styles.backButtonOverlay}
             onPress={() => router.back()}
           >
             <ArrowLeft size={20} color="#FFFFFF" />
@@ -125,6 +161,51 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  loadingText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Medium',
+    color: '#6B7280',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontFamily: 'Inter-SemiBold',
+    color: '#EF4444',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  errorText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  header: {
+    paddingHorizontal: 24,
+    paddingTop: 16,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   imageContainer: {
     position: 'relative',
   },
@@ -132,7 +213,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 300,
   },
-  backButton: {
+  backButtonOverlay: {
     position: 'absolute',
     top: 50,
     left: 24,
@@ -145,9 +226,6 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 24,
-  },
-  header: {
-    marginBottom: 24,
   },
   title: {
     fontSize: 28,

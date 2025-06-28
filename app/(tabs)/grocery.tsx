@@ -2,23 +2,51 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { useState, useEffect } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Check, RefreshCw } from 'lucide-react-native';
-import { mockMealPlan, mockRecipes } from '@/data/mockData';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { useAuth } from '@/contexts/AuthContext';
+import { useApi } from '@/hooks/useApi';
+import { recipeApi, mealPlanApi } from '@/lib/api';
 import { GroceryItem } from '@/types';
 
 export default function GroceryTab() {
+  const { user } = useAuth();
   const [groceryItems, setGroceryItems] = useState<GroceryItem[]>([]);
 
+  // Fetch user's meal plans
+  const {
+    data: mealPlans,
+    loading: mealPlansLoading,
+    refetch: refetchMealPlans
+  } = useApi(
+    () => mealPlanApi.getUserMealPlans(user?.id || ''),
+    [user?.id]
+  );
+
+  // Fetch all recipes
+  const {
+    data: recipes,
+    loading: recipesLoading
+  } = useApi(
+    () => recipeApi.getAllRecipes(),
+    []
+  );
+
   useEffect(() => {
-    generateGroceryList();
-  }, []);
+    if (mealPlans && recipes && mealPlans.length > 0) {
+      generateGroceryList();
+    }
+  }, [mealPlans, recipes]);
 
   const generateGroceryList = () => {
+    if (!mealPlans || !recipes || mealPlans.length === 0) return;
+
+    const currentMealPlan = mealPlans[0]; // Use most recent meal plan
     const allIngredients: { [key: string]: { quantity: number; unit: string; category: string } } = {};
 
     // Collect all ingredients from the weekly meal plan
-    mockMealPlan.dailyMeals.forEach(day => {
+    currentMealPlan.dailyMeals.forEach(day => {
       [day.breakfast, day.lunch, day.dinner, day.snack].filter(Boolean).forEach(recipeId => {
-        const recipe = mockRecipes.find(r => r.recipeID === recipeId);
+        const recipe = recipes.find(r => r.recipeID === recipeId);
         if (recipe) {
           recipe.ingredients.forEach(ingredient => {
             const key = ingredient.ingredientName.toLowerCase();
@@ -103,13 +131,46 @@ export default function GroceryTab() {
     'Diğer': '🛒'
   };
 
+  // Loading state
+  if (mealPlansLoading || recipesLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <LoadingSpinner size={32} color="#8FBC8F" />
+          <Text style={styles.loadingText}>Alışveriş listesi hazırlanıyor...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // No meal plan state
+  if (!mealPlans || mealPlans.length === 0) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Alışveriş Listesi</Text>
+        </View>
+
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyTitle}>Henüz bir planınız yok</Text>
+          <Text style={styles.emptyText}>
+            Alışveriş listesi oluşturmak için önce bir beslenme planı oluşturun.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Alışveriş Listesi</Text>
         <TouchableOpacity 
           style={styles.refreshButton}
-          onPress={generateGroceryList}
+          onPress={() => {
+            generateGroceryList();
+            refetchMealPlans();
+          }}
         >
           <RefreshCw size={20} color="#8FBC8F" />
           <Text style={styles.refreshText}>Yenile</Text>
@@ -204,6 +265,39 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Inter-Medium',
     color: '#8FBC8F',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  loadingText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Medium',
+    color: '#6B7280',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  emptyTitle: {
+    fontSize: 24,
+    fontFamily: 'Inter-Bold',
+    color: '#1F2937',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 24,
   },
   summaryCard: {
     marginHorizontal: 24,
