@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
-import { CheckCircle, Circle, Flame, Award } from 'lucide-react-native';
+import { CircleCheck as CheckCircle, Circle, Flame, Award } from 'lucide-react-native';
 import { Card } from './ui/Card';
 
 interface HabitItem {
