@@ -488,6 +488,80 @@ export const mealPlanApi = {
   },
 };
 
+// Calorie calculation helper
+const calculateDailyCalories = (user: User): number => {
+  // Mifflin-St Jeor Equation
+  let bmr: number;
+  
+  if (user.gender === 'Male') {
+    bmr = 10 * user.weight_kg + 6.25 * user.height_cm - 5 * user.age + 5;
+  } else {
+    bmr = 10 * user.weight_kg + 6.25 * user.height_cm - 5 * user.age - 161;
+  }
+
+  // Activity level multipliers
+  const activityMultipliers = {
+    'Sedentary': 1.2,
+    'Light': 1.375,
+    'Moderate': 1.55,
+    'Active': 1.725,
+  };
+
+  const tdee = bmr * activityMultipliers[user.activityLevel];
+
+  // Goal adjustments
+  switch (user.primaryGoal) {
+    case 'Lose Weight':
+      return Math.round(tdee - 500); // 500 calorie deficit
+    case 'Gain Muscle':
+      return Math.round(tdee + 300); // 300 calorie surplus
+    default:
+      return Math.round(tdee); // Maintain weight
+  }
+};
+
+// Generate meal plan based on user profile
+const generatePersonalizedMealPlan = async (user: User, recipes: Recipe[]): Promise<DailyMeal[]> => {
+  const targetCalories = calculateDailyCalories(user);
+  const dailyMeals: DailyMeal[] = [];
+
+  // Filter recipes based on dietary preferences
+  let availableRecipes = recipes;
+  if (user.dietaryPreferences.includes('Vegetarian')) {
+    // Filter out meat-based recipes (simplified logic)
+    availableRecipes = recipes.filter(r => 
+      !r.ingredients.some(ing => 
+        ing.ingredientName.toLowerCase().includes('tavuk') ||
+        ing.ingredientName.toLowerCase().includes('et') ||
+        ing.ingredientName.toLowerCase().includes('balık')
+      )
+    );
+  }
+
+  // Generate 7 days of meals
+  const days = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
+  
+  for (const day of days) {
+    // Simple meal selection logic
+    const breakfastRecipes = availableRecipes.filter(r => r.calories < 400);
+    const lunchRecipes = availableRecipes.filter(r => r.calories >= 300 && r.calories <= 600);
+    const dinnerRecipes = availableRecipes.filter(r => r.calories >= 400 && r.calories <= 700);
+
+    const breakfast = breakfastRecipes[Math.floor(Math.random() * breakfastRecipes.length)];
+    const lunch = lunchRecipes[Math.floor(Math.random() * lunchRecipes.length)];
+    const dinner = dinnerRecipes[Math.floor(Math.random() * dinnerRecipes.length)];
+
+    dailyMeals.push({
+      day,
+      breakfast: breakfast?.recipeID || availableRecipes[0]?.recipeID || '',
+      lunch: lunch?.recipeID || availableRecipes[1]?.recipeID || '',
+      dinner: dinner?.recipeID || availableRecipes[2]?.recipeID || '',
+    });
+  }
+
+  return dailyMeals;
+};
+
 // Auth integration helper
 export const authApi = {
   async handleUserSignUp(user: any, metadata?: any): Promise<ApiResponse<User>> {
@@ -511,6 +585,31 @@ export const authApi = {
     return await profileApi.createProfile(user.id, profileData);
   },
 
+  async createMinimalProfile(user: any): Promise<ApiResponse<User>> {
+    if (!user?.id) {
+      return { data: null, error: 'Invalid user data' };
+    }
+
+    // Create minimal profile that requires onboarding
+    const profileData: Partial<User> = {
+      email: user.email,
+      name: '', // Empty to trigger onboarding
+      age: 0,
+      gender: 'Other',
+      weight_kg: 0,
+      height_cm: 0,
+      activityLevel: 'Moderate',
+      primaryGoal: 'Maintain Weight',
+      dietaryPreferences: [],
+    };
+
+    return await profileApi.createProfile(user.id, profileData);
+  },
+
+  async updateUserProfile(userId: string, profileData: any): Promise<ApiResponse<User>> {
+    return await profileApi.updateProfile(userId, profileData);
+  },
+
   async ensureUserProfile(user: any): Promise<ApiResponse<User>> {
     if (!user?.id) {
       return { data: null, error: 'Invalid user data' };
@@ -523,23 +622,46 @@ export const authApi = {
       return { data: existingProfile, error: null };
     }
 
-    // If no profile exists, create one
+    // If no profile exists, create a minimal one
     if (error === 'Profile not found') {
-      const profileData: Partial<User> = {
-        email: user.email,
-        name: user.user_metadata?.name || user.email?.split('@')[0] || '',
-        age: 0,
-        gender: 'Other',
-        weight_kg: 0,
-        height_cm: 0,
-        activityLevel: 'Moderate',
-        primaryGoal: 'Maintain Weight',
-        dietaryPreferences: [],
-      };
-
-      return await profileApi.createProfile(user.id, profileData);
+      return await this.createMinimalProfile(user);
     }
 
     return { data: null, error };
+  },
+
+  async generateMealPlanForUser(userId: string): Promise<ApiResponse<MealPlan>> {
+    try {
+      // Get user profile
+      const { data: user, error: userError } = await profileApi.getProfile(userId);
+      if (userError || !user) {
+        return { data: null, error: userError || 'User profile not found' };
+      }
+
+      // Get all recipes
+      const { data: recipes, error: recipesError } = await recipeApi.getAllRecipes();
+      if (recipesError || !recipes) {
+        return { data: null, error: recipesError || 'Failed to fetch recipes' };
+      }
+
+      // Generate personalized meal plan
+      const dailyMeals = await generatePersonalizedMealPlan(user, recipes);
+
+      // Create date range (7 days starting from today)
+      const startDate = new Date().toISOString().split('T')[0];
+      const endDate = new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+      // Create meal plan
+      const mealPlanData = {
+        startDate,
+        endDate,
+        dailyMeals,
+      };
+
+      return await mealPlanApi.createMealPlan(userId, mealPlanData);
+    } catch (error) {
+      console.error('Error generating meal plan:', error);
+      return { data: null, error: 'Failed to generate meal plan' };
+    }
   },
 };

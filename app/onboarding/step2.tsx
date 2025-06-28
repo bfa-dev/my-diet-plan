@@ -1,11 +1,12 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft } from 'lucide-react-native';
 
 export default function OnboardingStep2() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const [selectedActivity, setSelectedActivity] = useState('');
 
   const activityLevels = [
@@ -30,6 +31,15 @@ export default function OnboardingStep2() {
       description: 'Haftada 6-7 gün yoğun egzersiz' 
     },
   ];
+
+  const handleContinue = () => {
+    if (selectedActivity) {
+      router.push({
+        pathname: '/onboarding/step3',
+        params: { ...params, activityLevel: selectedActivity },
+      });
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -91,7 +101,7 @@ export default function OnboardingStep2() {
 
       <TouchableOpacity 
         style={[styles.continueButton, !selectedActivity && styles.continueButtonDisabled]}
-        onPress={() => selectedActivity && router.push('/onboarding/step3')}
+        onPress={handleContinue}
         disabled={!selectedActivity}
       >
         <Text style={[styles.continueButtonText, !selectedActivity && styles.continueButtonTextDisabled]}>

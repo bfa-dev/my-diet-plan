@@ -11,6 +11,7 @@ interface AuthContextType {
   userProfile: any | null;
   loading: boolean;
   isAuthenticated: boolean;
+  needsOnboarding: boolean;
   signInWithEmail: (email: string, password: string) => Promise<{ error: any }>;
   signUpWithEmail: (email: string, password: string, metadata?: any) => Promise<{ error: any }>;
   signInWithApple: () => Promise<{ error: any }>;
@@ -18,6 +19,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: any }>;
   refreshUserProfile: () => Promise<void>;
+  completeOnboarding: (profileData: any) => Promise<{ error: any }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -60,6 +62,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
 
   const isAuthenticated = !!session && !!user;
+  
+  // Check if user needs onboarding (profile is incomplete)
+  const needsOnboarding = isAuthenticated && userProfile && (
+    !userProfile.name || 
+    !userProfile.age || 
+    !userProfile.gender || 
+    !userProfile.weight_kg || 
+    !userProfile.height_cm ||
+    !userProfile.activityLevel ||
+    !userProfile.primaryGoal
+  );
 
   // Storage helpers
   const getStorageItem = async (key: string): Promise<string | null> => {
@@ -142,6 +155,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user]);
 
+  // Complete onboarding with profile data
+  const completeOnboarding = useCallback(async (profileData: any) => {
+    if (!user?.id) {
+      return { error: { message: 'No user found' } };
+    }
+
+    try {
+      const { data: updatedProfile, error } = await authApi.updateUserProfile(user.id, profileData);
+      
+      if (error) {
+        return { error: { message: error } };
+      }
+
+      setUserProfile(updatedProfile);
+      return { error: null };
+    } catch (error) {
+      console.error('Error completing onboarding:', error);
+      return { error: { message: 'Failed to complete onboarding' } };
+    }
+  }, [user]);
+
   // Mock authentication functions for development
   const mockSignIn = async (email: string, password: string) => {
     try {
@@ -155,7 +189,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(mockSession);
       setUser(mockUser);
       
-      // Get or create user profile
+      // Get or create user profile (minimal profile for onboarding)
       const { data: profile } = await authApi.ensureUserProfile(mockUser);
       setUserProfile(profile);
       
@@ -177,8 +211,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(mockSession);
       setUser(mockUser);
       
-      // Create user profile with metadata
-      const { data: profile } = await authApi.handleUserSignUp(mockUser, metadata);
+      // Create minimal profile that will require onboarding
+      const { data: profile } = await authApi.createMinimalProfile(mockUser);
       setUserProfile(profile);
       
       return { error: null };
@@ -393,13 +427,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       console.log('✅ Supabase sign up successful:', data.user?.email);
       
-      // If user is immediately confirmed, set session and create profile
+      // If user is immediately confirmed, set session and create minimal profile
       if (data.session && data.user) {
         setSession(data.session);
         setUser(data.user);
         
-        // Create user profile
-        const { data: profile } = await authApi.handleUserSignUp(data.user, metadata);
+        // Create minimal profile that requires onboarding
+        const { data: profile } = await authApi.createMinimalProfile(data.user);
         setUserProfile(profile);
       }
       
@@ -480,6 +514,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     userProfile,
     loading,
     isAuthenticated,
+    needsOnboarding,
     signInWithEmail,
     signUpWithEmail,
     signInWithApple,
@@ -487,6 +522,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signOut,
     resetPassword,
     refreshUserProfile,
+    completeOnboarding,
   };
 
   return (

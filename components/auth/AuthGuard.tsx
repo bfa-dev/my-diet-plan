@@ -10,7 +10,7 @@ interface AuthGuardProps {
 }
 
 export function AuthGuard({ children }: AuthGuardProps) {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, needsOnboarding, loading } = useAuth();
   const router = useRouter();
   const segments = useSegments();
   const [hasNavigated, setHasNavigated] = useState(false);
@@ -32,8 +32,10 @@ export function AuthGuard({ children }: AuthGuardProps) {
 
     console.log('🛡️ AuthGuard Check:', {
       isAuthenticated,
+      needsOnboarding,
       segments: segments.join('/'),
       inAuthGroup,
+      inOnboardingGroup,
       inProtectedRoute,
       loading,
       hasNavigated
@@ -50,24 +52,34 @@ export function AuthGuard({ children }: AuthGuardProps) {
         // Redirect to auth if trying to access protected routes
         console.log('🔄 AuthGuard: Redirecting to auth - user not authenticated');
         setHasNavigated(true);
-        // Use a small delay to ensure state is properly updated
         setTimeout(() => {
           router.replace('/(auth)/welcome');
         }, 100);
       }
     } else {
       // User is authenticated
-      if (inAuthGroup && !hasNavigated) {
-        // Redirect to main app if trying to access auth routes
-        console.log('🔄 AuthGuard: Redirecting to tabs - user authenticated');
-        setHasNavigated(true);
-        // Use a small delay to ensure state is properly updated
-        setTimeout(() => {
-          router.replace('/(tabs)');
-        }, 100);
+      if (needsOnboarding) {
+        // User needs to complete onboarding
+        if (!inOnboardingGroup && !hasNavigated) {
+          console.log('🔄 AuthGuard: Redirecting to onboarding - profile incomplete');
+          setHasNavigated(true);
+          setTimeout(() => {
+            router.replace('/onboarding');
+          }, 100);
+        }
+      } else {
+        // User is fully set up
+        if ((inAuthGroup || inOnboardingGroup) && !hasNavigated) {
+          // Redirect to main app if trying to access auth/onboarding routes
+          console.log('🔄 AuthGuard: Redirecting to tabs - user fully authenticated');
+          setHasNavigated(true);
+          setTimeout(() => {
+            router.replace('/(tabs)');
+          }, 100);
+        }
       }
     }
-  }, [isAuthenticated, loading, segments, router, hasNavigated]);
+  }, [isAuthenticated, needsOnboarding, loading, segments, router, hasNavigated]);
 
   if (loading) {
     return (

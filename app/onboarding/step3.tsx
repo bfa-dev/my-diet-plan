@@ -1,11 +1,12 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, Target, TrendingDown, TrendingUp } from 'lucide-react-native';
 
 export default function OnboardingStep3() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const [selectedGoal, setSelectedGoal] = useState('');
 
   const goals = [
@@ -31,6 +32,15 @@ export default function OnboardingStep3() {
       color: '#3B82F6'
     },
   ];
+
+  const handleContinue = () => {
+    if (selectedGoal) {
+      router.push({
+        pathname: '/onboarding/step4',
+        params: { ...params, primaryGoal: selectedGoal },
+      });
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -98,7 +108,7 @@ export default function OnboardingStep3() {
 
       <TouchableOpacity 
         style={[styles.continueButton, !selectedGoal && styles.continueButtonDisabled]}
-        onPress={() => selectedGoal && router.push('/onboarding/step4')}
+        onPress={handleContinue}
         disabled={!selectedGoal}
       >
         <Text style={[styles.continueButtonText, !selectedGoal && styles.continueButtonTextDisabled]}>

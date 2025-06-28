@@ -22,6 +22,16 @@ export default function OnboardingStep1() {
 
   const isFormValid = formData.name && formData.age && formData.gender && formData.weight && formData.height;
 
+  const handleContinue = () => {
+    if (isFormValid) {
+      // Store form data in router params for next step
+      router.push({
+        pathname: '/onboarding/step2',
+        params: formData,
+      });
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -114,7 +124,7 @@ export default function OnboardingStep1() {
 
       <TouchableOpacity 
         style={[styles.continueButton, !isFormValid && styles.continueButtonDisabled]}
-        onPress={() => isFormValid && router.push('/onboarding/step2')}
+        onPress={handleContinue}
         disabled={!isFormValid}
       >
         <Text style={[styles.continueButtonText, !isFormValid && styles.continueButtonTextDisabled]}>

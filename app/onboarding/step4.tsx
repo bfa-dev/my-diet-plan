@@ -1,11 +1,12 @@
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft } from 'lucide-react-native';
 
 export default function OnboardingStep4() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const [selectedPreferences, setSelectedPreferences] = useState<string[]>([]);
 
   const dietaryPreferences = [
@@ -25,6 +26,13 @@ export default function OnboardingStep4() {
         ? prev.filter(p => p !== value)
         : [...prev, value]
     );
+  };
+
+  const handleContinue = () => {
+    router.push({
+      pathname: '/onboarding/complete',
+      params: { ...params, dietaryPreferences: JSON.stringify(selectedPreferences) },
+    });
   };
 
   return (
@@ -73,7 +81,7 @@ export default function OnboardingStep4() {
 
         <TouchableOpacity 
           style={styles.skipButton}
-          onPress={() => router.push('/onboarding/complete')}
+          onPress={handleContinue}
         >
           <Text style={styles.skipButtonText}>Atla</Text>
         </TouchableOpacity>
@@ -81,7 +89,7 @@ export default function OnboardingStep4() {
 
       <TouchableOpacity 
         style={styles.continueButton}
-        onPress={() => router.push('/onboarding/complete')}
+        onPress={handleContinue}
       >
         <Text style={styles.continueButtonText}>Planımı Oluştur</Text>
       </TouchableOpacity>

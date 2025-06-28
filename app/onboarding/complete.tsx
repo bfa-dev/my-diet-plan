@@ -1,10 +1,89 @@
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { useRouter } from 'expo-router';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { useState } from 'react';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CircleCheck as CheckCircle, Sparkles } from 'lucide-react-native';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { useAuth } from '@/contexts/AuthContext';
+import { authApi } from '@/lib/api';
 
 export default function OnboardingComplete() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const { completeOnboarding } = useAuth();
+  const [loading, setLoading] = useState(false);
+
+  const handleCompleteOnboarding = async () => {
+    setLoading(true);
+
+    try {
+      // Parse dietary preferences from JSON string
+      let dietaryPreferences: string[] = [];
+      try {
+        dietaryPreferences = JSON.parse(params.dietaryPreferences as string || '[]');
+      } catch (e) {
+        dietaryPreferences = [];
+      }
+
+      // Prepare profile data
+      const profileData = {
+        name: params.name as string,
+        age: parseInt(params.age as string),
+        gender: params.gender as string,
+        weight_kg: parseFloat(params.weight as string),
+        height_cm: parseFloat(params.height as string),
+        activityLevel: params.activityLevel as string,
+        primaryGoal: params.primaryGoal as string,
+        dietaryPreferences,
+      };
+
+      console.log('Completing onboarding with data:', profileData);
+
+      // Complete onboarding
+      const { error } = await completeOnboarding(profileData);
+
+      if (error) {
+        console.error('Error completing onboarding:', error);
+        Alert.alert('Hata', 'Profil güncellenirken bir hata oluştu. Lütfen tekrar deneyin.');
+        setLoading(false);
+        return;
+      }
+
+      // Generate initial meal plan
+      console.log('Generating initial meal plan...');
+      // This will be handled automatically by the AuthGuard navigation
+
+      setLoading(false);
+      
+      // Navigate to main app - AuthGuard will handle this automatically
+      // but we can trigger it explicitly
+      router.replace('/(tabs)');
+
+    } catch (error) {
+      console.error('Unexpected error during onboarding completion:', error);
+      Alert.alert('Hata', 'Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.');
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <LoadingSpinner size={48} color="#8FBC8F" />
+          <Text style={styles.loadingTitle}>Profiliniz Oluşturuluyor...</Text>
+          <Text style={styles.loadingSubtitle}>
+            Kişiselleştirilmiş beslenme planınız hazırlanıyor
+          </Text>
+          <View style={styles.loadingSteps}>
+            <Text style={styles.loadingStep}>✓ Profil bilgileri kaydediliyor</Text>
+            <Text style={styles.loadingStep}>✓ Kalori hedefi hesaplanıyor</Text>
+            <Text style={styles.loadingStep}>⏳ İlk beslenme planı oluşturuluyor</Text>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -17,23 +96,27 @@ export default function OnboardingComplete() {
           <Sparkles size={16} color="#F59E0B" style={styles.sparkle2} />
         </View>
 
-        <Text style={styles.title}>Harika! Planınız Hazır</Text>
+        <Text style={styles.title}>Harika! Profiliniz Hazır</Text>
         <Text style={styles.subtitle}>
-          Kişiselleştirilmiş beslenme planınızı oluşturduk. Sağlıklı yaşam yolculuğunuza başlamaya hazır mısınız?
+          Kişiselleştirilmiş beslenme planınızı oluşturmaya hazırız. Sağlıklı yaşam yolculuğunuza başlamaya hazır mısınız?
         </Text>
 
         <View style={styles.featuresContainer}>
           <View style={styles.feature}>
+            <Text style={styles.featureEmoji}>📊</Text>
+            <Text style={styles.featureText}>Size özel kalori hedefi</Text>
+          </View>
+          <View style={styles.feature}>
+            <Text style={styles.featureEmoji}>🍽️</Text>
+            <Text style={styles.featureText}>Hedefinize uygun tarifler</Text>
+          </View>
+          <View style={styles.feature}>
             <Text style={styles.featureEmoji}>📅</Text>
-            <Text style={styles.featureText}>7 günlük özel beslenme planı</Text>
+            <Text style={styles.featureText}>7 günlük beslenme planı</Text>
           </View>
           <View style={styles.feature}>
             <Text style={styles.featureEmoji}>🛒</Text>
             <Text style={styles.featureText}>Otomatik alışveriş listesi</Text>
-          </View>
-          <View style={styles.feature}>
-            <Text style={styles.featureEmoji}>🍽️</Text>
-            <Text style={styles.featureText}>Türk ve Akdeniz mutfağından tarifler</Text>
           </View>
         </View>
 
@@ -46,9 +129,10 @@ export default function OnboardingComplete() {
 
       <TouchableOpacity 
         style={styles.startButton}
-        onPress={() => router.replace('/(tabs)')}
+        onPress={handleCompleteOnboarding}
+        disabled={loading}
       >
-        <Text style={styles.startButtonText}>Planıma Başla</Text>
+        <Text style={styles.startButtonText}>Planımı Oluştur</Text>
       </TouchableOpacity>
     </SafeAreaView>
   );
@@ -149,5 +233,37 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontFamily: 'Inter-SemiBold',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  loadingTitle: {
+    fontSize: 24,
+    fontFamily: 'Inter-Bold',
+    color: '#1F2937',
+    marginTop: 24,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  loadingSubtitle: {
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+  },
+  loadingSteps: {
+    alignSelf: 'stretch',
+  },
+  loadingStep: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#6B7280',
+    marginBottom: 8,
+    textAlign: 'center',
   },
 });
