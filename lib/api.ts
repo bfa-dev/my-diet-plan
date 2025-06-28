@@ -1,5 +1,11 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 import { Recipe, User, MealPlan, DailyMeal } from '@/types';
+import { 
+  generatePersonalizedMealPlan, 
+  calculateDailyCalories, 
+  calculateMacroTargets,
+  validateMealPlan 
+} from './mealPlanGenerator';
 
 // API Response types
 interface ApiResponse<T> {
@@ -486,80 +492,60 @@ export const mealPlanApi = {
       return { data: false, error: 'Failed to delete meal plan' };
     }
   },
-};
 
-// Calorie calculation helper
-const calculateDailyCalories = (user: User): number => {
-  // Mifflin-St Jeor Equation
-  let bmr: number;
-  
-  if (user.gender === 'Male') {
-    bmr = 10 * user.weight_kg + 6.25 * user.height_cm - 5 * user.age + 5;
-  } else {
-    bmr = 10 * user.weight_kg + 6.25 * user.height_cm - 5 * user.age - 161;
-  }
+  async generatePersonalizedPlan(
+    userId: string, 
+    mealCount: number = 3,
+    forceRefresh: boolean = false
+  ): Promise<ApiResponse<MealPlan>> {
+    try {
+      // Check if user is premium for refresh capability
+      const { data: user, error: userError } = await profileApi.getProfile(userId);
+      if (userError || !user) {
+        return { data: null, error: userError || 'User profile not found' };
+      }
 
-  // Activity level multipliers
-  const activityMultipliers = {
-    'Sedentary': 1.2,
-    'Light': 1.375,
-    'Moderate': 1.55,
-    'Active': 1.725,
-  };
+      // Check if user can refresh (premium or no existing plan)
+      if (forceRefresh && !user.isPremiumUser) {
+        const { data: existingPlans } = await this.getUserMealPlans(userId);
+        if (existingPlans && existingPlans.length > 0) {
+          return { data: null, error: 'Plan yenileme premium özelliğidir' };
+        }
+      }
 
-  const tdee = bmr * activityMultipliers[user.activityLevel];
+      // Get all recipes
+      const { data: recipes, error: recipesError } = await recipeApi.getAllRecipes();
+      if (recipesError || !recipes) {
+        return { data: null, error: recipesError || 'Failed to fetch recipes' };
+      }
 
-  // Goal adjustments
-  switch (user.primaryGoal) {
-    case 'Lose Weight':
-      return Math.round(tdee - 500); // 500 calorie deficit
-    case 'Gain Muscle':
-      return Math.round(tdee + 300); // 300 calorie surplus
-    default:
-      return Math.round(tdee); // Maintain weight
-  }
-};
+      // Generate personalized meal plan
+      const dailyMeals = await generatePersonalizedMealPlan(user, recipes, mealCount);
 
-// Generate meal plan based on user profile
-const generatePersonalizedMealPlan = async (user: User, recipes: Recipe[]): Promise<DailyMeal[]> => {
-  const targetCalories = calculateDailyCalories(user);
-  const dailyMeals: DailyMeal[] = [];
+      // Validate the meal plan
+      const validation = validateMealPlan(user, dailyMeals, recipes);
+      if (!validation.isValid) {
+        console.warn('Generated meal plan has issues:', validation.issues);
+        // Continue anyway, but log the issues
+      }
 
-  // Filter recipes based on dietary preferences
-  let availableRecipes = recipes;
-  if (user.dietaryPreferences.includes('Vegetarian')) {
-    // Filter out meat-based recipes (simplified logic)
-    availableRecipes = recipes.filter(r => 
-      !r.ingredients.some(ing => 
-        ing.ingredientName.toLowerCase().includes('tavuk') ||
-        ing.ingredientName.toLowerCase().includes('et') ||
-        ing.ingredientName.toLowerCase().includes('balık')
-      )
-    );
-  }
+      // Create date range (7 days starting from today)
+      const startDate = new Date().toISOString().split('T')[0];
+      const endDate = new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-  // Generate 7 days of meals
-  const days = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
-  
-  for (const day of days) {
-    // Simple meal selection logic
-    const breakfastRecipes = availableRecipes.filter(r => r.calories < 400);
-    const lunchRecipes = availableRecipes.filter(r => r.calories >= 300 && r.calories <= 600);
-    const dinnerRecipes = availableRecipes.filter(r => r.calories >= 400 && r.calories <= 700);
+      // Create meal plan
+      const mealPlanData = {
+        startDate,
+        endDate,
+        dailyMeals,
+      };
 
-    const breakfast = breakfastRecipes[Math.floor(Math.random() * breakfastRecipes.length)];
-    const lunch = lunchRecipes[Math.floor(Math.random() * lunchRecipes.length)];
-    const dinner = dinnerRecipes[Math.floor(Math.random() * dinnerRecipes.length)];
-
-    dailyMeals.push({
-      day,
-      breakfast: breakfast?.recipeID || availableRecipes[0]?.recipeID || '',
-      lunch: lunch?.recipeID || availableRecipes[1]?.recipeID || '',
-      dinner: dinner?.recipeID || availableRecipes[2]?.recipeID || '',
-    });
-  }
-
-  return dailyMeals;
+      return await this.createMealPlan(userId, mealPlanData);
+    } catch (error) {
+      console.error('Error generating personalized meal plan:', error);
+      return { data: null, error: 'Failed to generate meal plan' };
+    }
+  },
 };
 
 // Auth integration helper
@@ -607,7 +593,27 @@ export const authApi = {
   },
 
   async updateUserProfile(userId: string, profileData: any): Promise<ApiResponse<User>> {
-    return await profileApi.updateProfile(userId, profileData);
+    const result = await profileApi.updateProfile(userId, profileData);
+    
+    // If profile update is successful and user has complete profile, generate meal plan
+    if (result.data && result.data.name && result.data.age && result.data.weight_kg) {
+      console.log('Profile complete, generating initial meal plan...');
+      
+      // Generate initial meal plan in the background
+      mealPlanApi.generatePersonalizedPlan(userId, 3, false)
+        .then(({ data, error }) => {
+          if (error) {
+            console.warn('Failed to generate initial meal plan:', error);
+          } else {
+            console.log('Initial meal plan generated successfully');
+          }
+        })
+        .catch(error => {
+          console.warn('Error generating initial meal plan:', error);
+        });
+    }
+    
+    return result;
   },
 
   async ensureUserProfile(user: any): Promise<ApiResponse<User>> {
@@ -631,37 +637,36 @@ export const authApi = {
   },
 
   async generateMealPlanForUser(userId: string): Promise<ApiResponse<MealPlan>> {
-    try {
-      // Get user profile
-      const { data: user, error: userError } = await profileApi.getProfile(userId);
-      if (userError || !user) {
-        return { data: null, error: userError || 'User profile not found' };
-      }
+    return await mealPlanApi.generatePersonalizedPlan(userId, 3, false);
+  },
+};
 
-      // Get all recipes
-      const { data: recipes, error: recipesError } = await recipeApi.getAllRecipes();
-      if (recipesError || !recipes) {
-        return { data: null, error: recipesError || 'Failed to fetch recipes' };
-      }
-
-      // Generate personalized meal plan
-      const dailyMeals = await generatePersonalizedMealPlan(user, recipes);
-
-      // Create date range (7 days starting from today)
-      const startDate = new Date().toISOString().split('T')[0];
-      const endDate = new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-
-      // Create meal plan
-      const mealPlanData = {
-        startDate,
-        endDate,
-        dailyMeals,
-      };
-
-      return await mealPlanApi.createMealPlan(userId, mealPlanData);
-    } catch (error) {
-      console.error('Error generating meal plan:', error);
-      return { data: null, error: 'Failed to generate meal plan' };
+// Nutrition calculation helpers
+export const nutritionApi = {
+  calculateDailyCalories,
+  calculateMacroTargets,
+  
+  async getUserNutritionTargets(userId: string): Promise<ApiResponse<{
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  }>> {
+    const { data: user, error } = await profileApi.getProfile(userId);
+    
+    if (error || !user) {
+      return { data: null, error: error || 'User not found' };
     }
+
+    const calories = calculateDailyCalories(user);
+    const macros = calculateMacroTargets(user, calories);
+
+    return {
+      data: {
+        calories,
+        ...macros,
+      },
+      error: null,
+    };
   },
 };

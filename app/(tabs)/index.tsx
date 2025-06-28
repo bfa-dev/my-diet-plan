@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ChevronLeft, ChevronRight, Plus, Calendar } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Plus, Calendar, PieChart } from 'lucide-react-native';
 import { MealCard } from '@/components/MealCard';
 import { WeeklyProgress } from '@/components/WeeklyProgress';
 import { NutritionSummary } from '@/components/NutritionSummary';
@@ -10,13 +10,14 @@ import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useApi } from '@/hooks/useApi';
-import { recipeApi, mealPlanApi } from '@/lib/api';
+import { recipeApi, mealPlanApi, nutritionApi } from '@/lib/api';
 import { Recipe, MealPlan } from '@/types';
 
 export default function HomeTab() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const [currentDayIndex, setCurrentDayIndex] = useState(0);
+  const [showMacroChart, setShowMacroChart] = useState(false);
 
   // Fetch user's meal plans
   const {
@@ -39,6 +40,15 @@ export default function HomeTab() {
     []
   );
 
+  // Fetch nutrition targets
+  const {
+    data: nutritionTargets,
+    loading: nutritionLoading
+  } = useApi(
+    () => nutritionApi.getUserNutritionTargets(user?.id || ''),
+    [user?.id, userProfile]
+  );
+
   // Get current meal plan (most recent one)
   const currentMealPlan = mealPlans?.[0];
   const currentDay = currentMealPlan?.dailyMeals[currentDayIndex];
@@ -47,6 +57,7 @@ export default function HomeTab() {
   const breakfastRecipe = recipes?.find(r => r.recipeID === currentDay?.breakfast);
   const lunchRecipe = recipes?.find(r => r.recipeID === currentDay?.lunch);
   const dinnerRecipe = recipes?.find(r => r.recipeID === currentDay?.dinner);
+  const snackRecipe = currentDay?.snack ? recipes?.find(r => r.recipeID === currentDay.snack) : null;
 
   const navigateDay = (direction: 'prev' | 'next') => {
     if (!currentMealPlan) return;
@@ -73,18 +84,30 @@ export default function HomeTab() {
 
   // Calculate daily nutrition totals
   const dailyNutrition = {
-    calories: (breakfastRecipe?.calories || 0) + (lunchRecipe?.calories || 0) + (dinnerRecipe?.calories || 0),
-    protein: (breakfastRecipe?.protein_grams || 0) + (lunchRecipe?.protein_grams || 0) + (dinnerRecipe?.protein_grams || 0),
-    carbs: (breakfastRecipe?.carbs_grams || 0) + (lunchRecipe?.carbs_grams || 0) + (dinnerRecipe?.carbs_grams || 0),
-    fat: (breakfastRecipe?.fat_grams || 0) + (lunchRecipe?.fat_grams || 0) + (dinnerRecipe?.fat_grams || 0),
-    targetCalories: 1800,
-    targetProtein: 120,
-    targetCarbs: 200,
-    targetFat: 60,
+    calories: (breakfastRecipe?.calories || 0) + 
+              (lunchRecipe?.calories || 0) + 
+              (dinnerRecipe?.calories || 0) + 
+              (snackRecipe?.calories || 0),
+    protein: (breakfastRecipe?.protein_grams || 0) + 
+             (lunchRecipe?.protein_grams || 0) + 
+             (dinnerRecipe?.protein_grams || 0) + 
+             (snackRecipe?.protein_grams || 0),
+    carbs: (breakfastRecipe?.carbs_grams || 0) + 
+           (lunchRecipe?.carbs_grams || 0) + 
+           (dinnerRecipe?.carbs_grams || 0) + 
+           (snackRecipe?.carbs_grams || 0),
+    fat: (breakfastRecipe?.fat_grams || 0) + 
+         (lunchRecipe?.fat_grams || 0) + 
+         (dinnerRecipe?.fat_grams || 0) + 
+         (snackRecipe?.fat_grams || 0),
+    targetCalories: nutritionTargets?.calories || 1800,
+    targetProtein: nutritionTargets?.protein || 120,
+    targetCarbs: nutritionTargets?.carbs || 200,
+    targetFat: nutritionTargets?.fat || 60,
   };
 
   // Loading state
-  if (mealPlansLoading || recipesLoading) {
+  if (mealPlansLoading || recipesLoading || nutritionLoading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
@@ -149,12 +172,20 @@ export default function HomeTab() {
           <Text style={styles.welcomeText}>Merhaba! 👋</Text>
           <Text style={styles.headerTitle}>Bugünkü Planınız</Text>
         </View>
-        <TouchableOpacity 
-          style={styles.calendarButton}
-          onPress={() => {/* Navigate to calendar view */}}
-        >
-          <Calendar size={20} color="#8FBC8F" />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity 
+            style={styles.chartButton}
+            onPress={() => setShowMacroChart(!showMacroChart)}
+          >
+            <PieChart size={20} color="#8FBC8F" />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.calendarButton}
+            onPress={() => {/* Navigate to calendar view */}}
+          >
+            <Calendar size={20} color="#8FBC8F" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -186,7 +217,7 @@ export default function HomeTab() {
           </TouchableOpacity>
         </View>
 
-        <NutritionSummary data={dailyNutrition} />
+        <NutritionSummary data={dailyNutrition} showMacroChart={showMacroChart} />
 
         <View style={styles.mealsSection}>
           <View style={styles.sectionHeader}>
@@ -218,6 +249,14 @@ export default function HomeTab() {
               recipe={dinnerRecipe} 
               mealTime="Akşam Yemeği" 
               onPress={() => router.push(`/recipe/${dinnerRecipe.recipeID}`)}
+            />
+          )}
+
+          {snackRecipe && (
+            <MealCard 
+              recipe={snackRecipe} 
+              mealTime="Ara Öğün" 
+              onPress={() => router.push(`/recipe/${snackRecipe.recipeID}`)}
             />
           )}
         </View>
@@ -264,6 +303,18 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontFamily: 'Inter-Bold',
     color: '#1F2937',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  chartButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F0F9F0',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   calendarButton: {
     width: 40,

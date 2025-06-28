@@ -1,24 +1,27 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Sparkles, Target, Calendar, Users } from 'lucide-react-native';
+import { ArrowLeft, Sparkles, Target, Calendar, Users, Crown } from 'lucide-react-native';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { useAuth } from '@/contexts/AuthContext';
+import { mealPlanApi } from '@/lib/api';
 
 export default function PlanGenerator() {
   const router = useRouter();
+  const { user, userProfile } = useAuth();
   const [selectedGoal, setSelectedGoal] = useState('');
   const [selectedDuration, setSelectedDuration] = useState('7');
-  const [selectedPeople, setSelectedPeople] = useState('2');
+  const [selectedMealCount, setSelectedMealCount] = useState('3');
   const [isGenerating, setIsGenerating] = useState(false);
 
   const goals = [
-    { id: 'weight_loss', title: 'Kilo Vermek', subtitle: 'Sağlıklı kilo kaybı', icon: '🎯' },
-    { id: 'muscle_gain', title: 'Kas Yapmak', subtitle: 'Protein odaklı beslenme', icon: '💪' },
-    { id: 'healthy_eating', title: 'Sağlıklı Beslenme', subtitle: 'Dengeli ve besleyici', icon: '🥗' },
-    { id: 'energy_boost', title: 'Enerji Artışı', subtitle: 'Aktif yaşam için', icon: '⚡' },
+    { id: 'weight_loss', title: 'Kilo Vermek', subtitle: 'Kalori açığı ile sağlıklı kilo kaybı', icon: '🎯' },
+    { id: 'muscle_gain', title: 'Kas Yapmak', subtitle: 'Protein odaklı beslenme planı', icon: '💪' },
+    { id: 'healthy_eating', title: 'Sağlıklı Beslenme', subtitle: 'Dengeli ve besleyici öğünler', icon: '🥗' },
+    { id: 'energy_boost', title: 'Enerji Artışı', subtitle: 'Aktif yaşam için optimize edilmiş', icon: '⚡' },
   ];
 
   const durations = [
@@ -27,20 +30,60 @@ export default function PlanGenerator() {
     { id: '30', title: '1 Ay', subtitle: 'Uzun vadeli plan' },
   ];
 
-  const peopleOptions = [
-    { id: '1', title: '1 Kişi', subtitle: 'Sadece ben' },
-    { id: '2', title: '2 Kişi', subtitle: 'Çift için' },
-    { id: '4', title: '4 Kişi', subtitle: 'Aile için' },
+  const mealCounts = [
+    { id: '3', title: '3 Öğün', subtitle: 'Kahvaltı, öğle, akşam' },
+    { id: '4', title: '4 Öğün', subtitle: 'Ara öğün dahil' },
   ];
 
   const generatePlan = async () => {
+    if (!user?.id) {
+      Alert.alert('Hata', 'Kullanıcı bilgisi bulunamadı');
+      return;
+    }
+
+    if (!userProfile?.isPremiumUser) {
+      // Check if user already has a meal plan
+      const { data: existingPlans } = await mealPlanApi.getUserMealPlans(user.id);
+      if (existingPlans && existingPlans.length > 0) {
+        Alert.alert(
+          'Premium Özellik',
+          'Plan yenileme premium kullanıcılar için geçerlidir. Mevcut planınızı kullanmaya devam edebilirsiniz.',
+          [
+            { text: 'Premium\'a Geç', onPress: () => router.push('/premium') },
+            { text: 'Tamam', style: 'cancel' }
+          ]
+        );
+        return;
+      }
+    }
+
     setIsGenerating(true);
     
-    // Simulate AI plan generation
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    
-    setIsGenerating(false);
-    router.replace('/(tabs)');
+    try {
+      const { data, error } = await mealPlanApi.generatePersonalizedPlan(
+        user.id,
+        parseInt(selectedMealCount),
+        true // Force refresh for new plan
+      );
+
+      if (error) {
+        Alert.alert('Hata', error);
+        return;
+      }
+
+      if (data) {
+        Alert.alert(
+          'Başarılı!',
+          'Kişiselleştirilmiş beslenme planınız oluşturuldu!',
+          [{ text: 'Planımı Gör', onPress: () => router.replace('/(tabs)') }]
+        );
+      }
+    } catch (error) {
+      console.error('Error generating plan:', error);
+      Alert.alert('Hata', 'Plan oluşturulurken bir hata oluştu');
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   if (isGenerating) {
@@ -56,8 +99,9 @@ export default function PlanGenerator() {
             </Text>
             <View style={styles.loadingSteps}>
               <Text style={styles.loadingStep}>✓ Hedefleriniz analiz ediliyor</Text>
-              <Text style={styles.loadingStep}>✓ Tarifler seçiliyor</Text>
-              <Text style={styles.loadingStep}>⏳ Alışveriş listesi hazırlanıyor</Text>
+              <Text style={styles.loadingStep}>✓ Kalori ihtiyacınız hesaplanıyor</Text>
+              <Text style={styles.loadingStep}>✓ Diyet tercihleriniz filtreleniyor</Text>
+              <Text style={styles.loadingStep}>⏳ Tarifler seçiliyor ve planlanıyor</Text>
             </View>
           </View>
         </View>
@@ -84,10 +128,41 @@ export default function PlanGenerator() {
           </Text>
         </View>
 
+        {userProfile && (
+          <Card style={styles.profileCard}>
+            <Text style={styles.profileTitle}>Profil Özeti</Text>
+            <View style={styles.profileStats}>
+              <View style={styles.profileStat}>
+                <Text style={styles.profileStatLabel}>Hedef</Text>
+                <Text style={styles.profileStatValue}>
+                  {userProfile.primaryGoal === 'Lose Weight' ? 'Kilo Vermek' :
+                   userProfile.primaryGoal === 'Gain Muscle' ? 'Kas Yapmak' : 'Korumak'}
+                </Text>
+              </View>
+              <View style={styles.profileStat}>
+                <Text style={styles.profileStatLabel}>Aktivite</Text>
+                <Text style={styles.profileStatValue}>
+                  {userProfile.activityLevel === 'Sedentary' ? 'Az Aktif' :
+                   userProfile.activityLevel === 'Light' ? 'Hafif' :
+                   userProfile.activityLevel === 'Moderate' ? 'Orta' : 'Yüksek'}
+                </Text>
+              </View>
+              <View style={styles.profileStat}>
+                <Text style={styles.profileStatLabel}>Diyet</Text>
+                <Text style={styles.profileStatValue}>
+                  {userProfile.dietaryPreferences.length > 0 
+                    ? userProfile.dietaryPreferences.join(', ')
+                    : 'Kısıtlama Yok'}
+                </Text>
+              </View>
+            </View>
+          </Card>
+        )}
+
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Target size={20} color="#8FBC8F" />
-            <Text style={styles.sectionTitle}>Hedefinizi Seçin</Text>
+            <Text style={styles.sectionTitle}>Plan Türü</Text>
           </View>
           
           <View style={styles.optionsGrid}>
@@ -134,18 +209,18 @@ export default function PlanGenerator() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Users size={20} color="#8FBC8F" />
-            <Text style={styles.sectionTitle}>Kaç Kişi İçin?</Text>
+            <Text style={styles.sectionTitle}>Günlük Öğün Sayısı</Text>
           </View>
           
           <View style={styles.optionsRow}>
-            {peopleOptions.map((option) => (
+            {mealCounts.map((option) => (
               <TouchableOpacity
                 key={option.id}
                 style={[
                   styles.optionCardSmall,
-                  selectedPeople === option.id && styles.optionCardSelected
+                  selectedMealCount === option.id && styles.optionCardSelected
                 ]}
-                onPress={() => setSelectedPeople(option.id)}
+                onPress={() => setSelectedMealCount(option.id)}
               >
                 <Text style={styles.optionTitle}>{option.title}</Text>
                 <Text style={styles.optionSubtitle}>{option.subtitle}</Text>
@@ -157,7 +232,7 @@ export default function PlanGenerator() {
         <Card style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>Plan Özeti</Text>
           <View style={styles.summaryItem}>
-            <Text style={styles.summaryLabel}>Hedef:</Text>
+            <Text style={styles.summaryLabel}>Plan Türü:</Text>
             <Text style={styles.summaryValue}>
               {goals.find(g => g.id === selectedGoal)?.title || 'Seçilmedi'}
             </Text>
@@ -169,12 +244,43 @@ export default function PlanGenerator() {
             </Text>
           </View>
           <View style={styles.summaryItem}>
-            <Text style={styles.summaryLabel}>Kişi Sayısı:</Text>
+            <Text style={styles.summaryLabel}>Öğün Sayısı:</Text>
             <Text style={styles.summaryValue}>
-              {peopleOptions.find(p => p.id === selectedPeople)?.title || '2 Kişi'}
+              {mealCounts.find(m => m.id === selectedMealCount)?.title || '3 Öğün'}
             </Text>
           </View>
+          
+          {userProfile && (
+            <View style={styles.nutritionPreview}>
+              <Text style={styles.nutritionTitle}>Tahmini Günlük Hedefler</Text>
+              <View style={styles.nutritionRow}>
+                <Text style={styles.nutritionLabel}>Kalori:</Text>
+                <Text style={styles.nutritionValue}>
+                  {userProfile.primaryGoal === 'Lose Weight' ? '1400-1600' :
+                   userProfile.primaryGoal === 'Gain Muscle' ? '2000-2200' : '1700-1900'} kcal
+                </Text>
+              </View>
+              <View style={styles.nutritionRow}>
+                <Text style={styles.nutritionLabel}>Protein:</Text>
+                <Text style={styles.nutritionValue}>
+                  {userProfile.primaryGoal === 'Gain Muscle' ? '120-140' : '80-100'}g
+                </Text>
+              </View>
+            </View>
+          )}
         </Card>
+
+        {!userProfile?.isPremiumUser && (
+          <Card style={styles.premiumNotice}>
+            <View style={styles.premiumHeader}>
+              <Crown size={20} color="#F59E0B" />
+              <Text style={styles.premiumTitle}>Premium Özellik</Text>
+            </View>
+            <Text style={styles.premiumText}>
+              Plan yenileme premium kullanıcılar için sınırsızdır. Ücretsiz kullanıcılar tek plan oluşturabilir.
+            </Text>
+          </Card>
+        )}
       </ScrollView>
 
       <View style={styles.footer}>
@@ -232,6 +338,36 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     textAlign: 'center',
     lineHeight: 24,
+  },
+  profileCard: {
+    padding: 20,
+    marginBottom: 24,
+  },
+  profileTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#1F2937',
+    marginBottom: 16,
+  },
+  profileStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  profileStat: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  profileStatLabel: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  profileStatValue: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#1F2937',
+    textAlign: 'center',
   },
   section: {
     marginBottom: 32,
@@ -319,6 +455,57 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Inter-SemiBold',
     color: '#1F2937',
+  },
+  nutritionPreview: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  nutritionTitle: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  nutritionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  nutritionLabel: {
+    fontSize: 13,
+    fontFamily: 'Inter-Regular',
+    color: '#6B7280',
+  },
+  nutritionValue: {
+    fontSize: 13,
+    fontFamily: 'Inter-Medium',
+    color: '#8FBC8F',
+  },
+  premiumNotice: {
+    padding: 16,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    marginBottom: 24,
+  },
+  premiumHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  premiumTitle: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#F59E0B',
+  },
+  premiumText: {
+    fontSize: 13,
+    fontFamily: 'Inter-Regular',
+    color: '#92400E',
+    lineHeight: 18,
   },
   footer: {
     paddingHorizontal: 24,
