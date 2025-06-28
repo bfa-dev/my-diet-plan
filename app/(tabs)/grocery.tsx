@@ -1,8 +1,9 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useState, useEffect } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Check, RefreshCw } from 'lucide-react-native';
+import { Check, RefreshCw, Share2 } from 'lucide-react-native';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { GroceryExportModal } from '@/components/GroceryExportModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { useApi } from '@/hooks/useApi';
 import { recipeApi, mealPlanApi } from '@/lib/api';
@@ -11,6 +12,7 @@ import { GroceryItem } from '@/types';
 export default function GroceryTab() {
   const { user } = useAuth();
   const [groceryItems, setGroceryItems] = useState<GroceryItem[]>([]);
+  const [exportModalVisible, setExportModalVisible] = useState(false);
 
   // Fetch user's meal plans
   const {
@@ -131,6 +133,24 @@ export default function GroceryTab() {
     'Diğer': '🛒'
   };
 
+  // Generate week range for export
+  const getWeekRange = () => {
+    if (!mealPlans || mealPlans.length === 0) return '';
+    
+    const plan = mealPlans[0];
+    const startDate = new Date(plan.startDate);
+    const endDate = new Date(plan.endDate);
+    
+    const formatDate = (date: Date) => {
+      return date.toLocaleDateString('tr-TR', { 
+        day: '2-digit', 
+        month: 'long' 
+      });
+    };
+    
+    return `${formatDate(startDate)} - ${formatDate(endDate)} Haftası`;
+  };
+
   // Loading state
   if (mealPlansLoading || recipesLoading) {
     return (
@@ -165,16 +185,25 @@ export default function GroceryTab() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Alışveriş Listesi</Text>
-        <TouchableOpacity 
-          style={styles.refreshButton}
-          onPress={() => {
-            generateGroceryList();
-            refetchMealPlans();
-          }}
-        >
-          <RefreshCw size={20} color="#8FBC8F" />
-          <Text style={styles.refreshText}>Yenile</Text>
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => setExportModalVisible(true)}
+          >
+            <Share2 size={18} color="#8FBC8F" />
+            <Text style={styles.actionButtonText}>Dışa Aktar</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.refreshButton}
+            onPress={() => {
+              generateGroceryList();
+              refetchMealPlans();
+            }}
+          >
+            <RefreshCw size={18} color="#8FBC8F" />
+            <Text style={styles.refreshText}>Yenile</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.summaryCard}>
@@ -182,6 +211,7 @@ export default function GroceryTab() {
         <Text style={styles.summaryText}>
           {groceryItems.length} malzeme • {Object.keys(groupedItems).length} kategori
         </Text>
+        <Text style={styles.weekRangeText}>{getWeekRange()}</Text>
       </View>
 
       <ScrollView style={styles.listContainer} showsVerticalScrollIndicator={false}>
@@ -230,6 +260,14 @@ export default function GroceryTab() {
           Alışverişten önce tüm malzemeleri kontrol edin. Eksik olan malzemeleri işaretleyerek daha verimli alışveriş yapabilirsiniz.
         </Text>
       </View>
+
+      {/* Export Modal */}
+      <GroceryExportModal
+        visible={exportModalVisible}
+        onClose={() => setExportModalVisible(false)}
+        groceryItems={groceryItems}
+        weekRange={getWeekRange()}
+      />
     </SafeAreaView>
   );
 }
@@ -252,17 +290,37 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Bold',
     color: '#1F2937',
   },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#F0F9F0',
+    borderWidth: 1,
+    borderColor: '#8FBC8F',
+  },
+  actionButtonText: {
+    fontSize: 12,
+    fontFamily: 'Inter-Medium',
+    color: '#8FBC8F',
+  },
   refreshButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
     backgroundColor: '#F0F9F0',
   },
   refreshText: {
-    fontSize: 14,
+    fontSize: 12,
     fontFamily: 'Inter-Medium',
     color: '#8FBC8F',
   },
@@ -316,6 +374,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Inter-Regular',
     color: '#6B7280',
+  },
+  weekRangeText: {
+    fontSize: 12,
+    fontFamily: 'Inter-Medium',
+    color: '#8FBC8F',
+    marginTop: 4,
   },
   listContainer: {
     flex: 1,

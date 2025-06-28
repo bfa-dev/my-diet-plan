@@ -702,6 +702,40 @@ export const mealPlanApi = {
       return { data: null, error: 'Failed to generate meal plan' };
     }
   },
+
+  async swapMeal(
+    mealPlanId: string,
+    dayIndex: number,
+    mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack',
+    newRecipeId: string
+  ): Promise<ApiResponse<MealPlan>> {
+    try {
+      // First, get the current meal plan
+      const { data: mealPlans } = await this.getUserMealPlans(''); // We'll need to pass userId properly
+      const currentPlan = mealPlans?.find(plan => plan.mealPlanID === mealPlanId);
+      
+      if (!currentPlan) {
+        return { data: null, error: 'Meal plan not found' };
+      }
+
+      // Update the specific meal
+      const updatedDailyMeals = [...currentPlan.dailyMeals];
+      if (updatedDailyMeals[dayIndex]) {
+        updatedDailyMeals[dayIndex] = {
+          ...updatedDailyMeals[dayIndex],
+          [mealType]: newRecipeId,
+        };
+      }
+
+      // Update the meal plan
+      return await this.updateMealPlan(mealPlanId, {
+        dailyMeals: updatedDailyMeals,
+      });
+    } catch (error) {
+      console.error('Error swapping meal:', error);
+      return { data: null, error: 'Failed to swap meal' };
+    }
+  },
 };
 
 // Auth integration helper

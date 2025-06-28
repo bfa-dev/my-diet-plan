@@ -1,9 +1,10 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, ChevronRight, Plus, Calendar, ChartPie as PieChart } from 'lucide-react-native';
 import { MealCard } from '@/components/MealCard';
+import { MealSwapModal } from '@/components/MealSwapModal';
 import { WeeklyProgress } from '@/components/WeeklyProgress';
 import { NutritionSummary } from '@/components/NutritionSummary';
 import { Button } from '@/components/ui/Button';
@@ -18,6 +19,13 @@ export default function HomeTab() {
   const { user, userProfile } = useAuth();
   const [currentDayIndex, setCurrentDayIndex] = useState(0);
   const [showMacroChart, setShowMacroChart] = useState(false);
+  const [swapModalVisible, setSwapModalVisible] = useState(false);
+  const [swapMealData, setSwapMealData] = useState<{
+    recipe: Recipe;
+    mealType: string;
+    dayIndex: number;
+    mealKey: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+  } | null>(null);
 
   // Fetch user's meal plans
   const {
@@ -34,7 +42,8 @@ export default function HomeTab() {
   const {
     data: recipes,
     loading: recipesLoading,
-    error: recipesError
+    error: recipesError,
+    refetch: refetchRecipes
   } = useApi(
     () => recipeApi.getAllRecipes(),
     []
@@ -104,6 +113,50 @@ export default function HomeTab() {
     targetProtein: nutritionTargets?.protein || 120,
     targetCarbs: nutritionTargets?.carbs || 200,
     targetFat: nutritionTargets?.fat || 60,
+  };
+
+  const handleSwapMeal = (
+    recipe: Recipe, 
+    mealType: string, 
+    mealKey: 'breakfast' | 'lunch' | 'dinner' | 'snack'
+  ) => {
+    setSwapMealData({
+      recipe,
+      mealType,
+      dayIndex: currentDayIndex,
+      mealKey,
+    });
+    setSwapModalVisible(true);
+  };
+
+  const handleMealSwapConfirm = async (newRecipe: Recipe) => {
+    if (!swapMealData || !currentMealPlan) return;
+
+    try {
+      // Update the meal plan with the new recipe
+      const { error } = await mealPlanApi.swapMeal(
+        currentMealPlan.mealPlanID,
+        swapMealData.dayIndex,
+        swapMealData.mealKey,
+        newRecipe.recipeID
+      );
+
+      if (error) {
+        Alert.alert('Hata', 'Öğün değiştirilirken bir hata oluştu.');
+        return;
+      }
+
+      // Refresh meal plans and recipes
+      await refetchMealPlans();
+      await refetchRecipes();
+
+      Alert.alert('Başarılı!', `${swapMealData.mealType} başarıyla değiştirildi.`);
+      setSwapModalVisible(false);
+      setSwapMealData(null);
+    } catch (error) {
+      console.error('Error swapping meal:', error);
+      Alert.alert('Hata', 'Beklenmeyen bir hata oluştu.');
+    }
   };
 
   // Loading state
@@ -233,6 +286,8 @@ export default function HomeTab() {
               recipe={breakfastRecipe} 
               mealTime="Kahvaltı" 
               onPress={() => router.push(`/recipe/${breakfastRecipe.recipeID}`)}
+              onSwap={() => handleSwapMeal(breakfastRecipe, 'Kahvaltı', 'breakfast')}
+              showSwapButton={true}
             />
           )}
           
@@ -241,6 +296,8 @@ export default function HomeTab() {
               recipe={lunchRecipe} 
               mealTime="Öğle Yemeği" 
               onPress={() => router.push(`/recipe/${lunchRecipe.recipeID}`)}
+              onSwap={() => handleSwapMeal(lunchRecipe, 'Öğle Yemeği', 'lunch')}
+              showSwapButton={true}
             />
           )}
           
@@ -249,6 +306,8 @@ export default function HomeTab() {
               recipe={dinnerRecipe} 
               mealTime="Akşam Yemeği" 
               onPress={() => router.push(`/recipe/${dinnerRecipe.recipeID}`)}
+              onSwap={() => handleSwapMeal(dinnerRecipe, 'Akşam Yemeği', 'dinner')}
+              showSwapButton={true}
             />
           )}
 
@@ -257,6 +316,8 @@ export default function HomeTab() {
               recipe={snackRecipe} 
               mealTime="Ara Öğün" 
               onPress={() => router.push(`/recipe/${snackRecipe.recipeID}`)}
+              onSwap={() => handleSwapMeal(snackRecipe, 'Ara Öğün', 'snack')}
+              showSwapButton={true}
             />
           )}
         </View>
@@ -275,6 +336,22 @@ export default function HomeTab() {
           />
         </View>
       </ScrollView>
+
+      {/* Meal Swap Modal */}
+      {swapMealData && (
+        <MealSwapModal
+          visible={swapModalVisible}
+          onClose={() => {
+            setSwapModalVisible(false);
+            setSwapMealData(null);
+          }}
+          onSelectRecipe={handleMealSwapConfirm}
+          currentRecipe={swapMealData.recipe}
+          mealType={swapMealData.mealType}
+          targetCalories={swapMealData.recipe.calories}
+          userDietaryPreferences={userProfile?.dietaryPreferences || []}
+        />
+      )}
     </SafeAreaView>
   );
 }

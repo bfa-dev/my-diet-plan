@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import { Clock, Flame, Users } from 'lucide-react-native';
+import { Clock, Flame, Users, RefreshCw } from 'lucide-react-native';
 import { Card } from './ui/Card';
 import { Recipe } from '@/types';
 
@@ -8,20 +8,37 @@ interface MealCardProps {
   recipe: Recipe;
   mealTime: string;
   onPress: () => void;
+  onSwap?: () => void;
+  showSwapButton?: boolean;
 }
 
-export function MealCard({ recipe, mealTime, onPress }: MealCardProps) {
+export function MealCard({ recipe, mealTime, onPress, onSwap, showSwapButton = false }: MealCardProps) {
   const totalTime = recipe.prepTime_minutes + recipe.cookTime_minutes;
 
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.9}>
-      <Card variant="elevated" style={styles.container}>
+    <Card variant="elevated" style={styles.container}>
+      <TouchableOpacity onPress={onPress} activeOpacity={0.9} style={styles.touchable}>
         <Image source={{ uri: recipe.photoURL }} style={styles.image} />
         <View style={styles.content}>
           <View style={styles.header}>
             <Text style={styles.mealTime}>{mealTime}</Text>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{recipe.cuisineType}</Text>
+            <View style={styles.badgeContainer}>
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{recipe.cuisineType}</Text>
+              </View>
+              {showSwapButton && onSwap && (
+                <TouchableOpacity 
+                  style={styles.swapButton}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    onSwap();
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <RefreshCw size={14} color="#8FBC8F" />
+                  <Text style={styles.swapButtonText}>Değiştir</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
           <Text style={styles.title} numberOfLines={2}>{recipe.title}</Text>
@@ -42,8 +59,8 @@ export function MealCard({ recipe, mealTime, onPress }: MealCardProps) {
             </View>
           </View>
         </View>
-      </Card>
-    </TouchableOpacity>
+      </TouchableOpacity>
+    </Card>
   );
 }
 
@@ -51,6 +68,9 @@ const styles = StyleSheet.create({
   container: {
     marginBottom: 16,
     overflow: 'hidden',
+  },
+  touchable: {
+    flex: 1,
   },
   image: {
     width: '100%',
@@ -72,6 +92,11 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
+  badgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   badge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -79,6 +104,22 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   badgeText: {
+    fontSize: 10,
+    fontFamily: 'Inter-Medium',
+    color: '#8FBC8F',
+  },
+  swapButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#F0F9F0',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#8FBC8F',
+  },
+  swapButtonText: {
     fontSize: 10,
     fontFamily: 'Inter-Medium',
     color: '#8FBC8F',
