@@ -22,12 +22,12 @@ export default function ProfileTab() {
           style: 'destructive',
           onPress: async () => {
             try {
-              console.log('Starting logout process...');
+              console.log('🚪 Profile: Starting logout process...');
               await signOut();
-              console.log('Logout completed, navigating to welcome...');
-              // Navigation will be handled by AuthGuard
+              console.log('✅ Profile: Logout completed successfully');
+              // Don't manually navigate - let AuthGuard handle it
             } catch (error) {
-              console.error('Error during sign out:', error);
+              console.error('❌ Profile: Error during sign out:', error);
               Alert.alert('Hata', 'Çıkış yapılırken bir hata oluştu');
             }
           }

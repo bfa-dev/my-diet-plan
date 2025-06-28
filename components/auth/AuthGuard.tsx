@@ -15,7 +15,10 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const segments = useSegments();
 
   useEffect(() => {
-    if (loading) return;
+    if (loading) {
+      console.log('🛡️ AuthGuard: Still loading, waiting...');
+      return;
+    }
 
     const inAuthGroup = segments[0] === '(auth)';
     const inTabsGroup = segments[0] === '(tabs)';
@@ -38,14 +41,14 @@ export function AuthGuard({ children }: AuthGuardProps) {
       // User is not authenticated
       if (inProtectedRoute) {
         // Redirect to auth if trying to access protected routes
-        console.log('🔄 Redirecting to auth - user not authenticated');
+        console.log('🔄 AuthGuard: Redirecting to auth - user not authenticated');
         router.replace('/(auth)/welcome');
       }
     } else {
       // User is authenticated
       if (inAuthGroup) {
         // Redirect to main app if trying to access auth routes
-        console.log('🔄 Redirecting to tabs - user authenticated');
+        console.log('🔄 AuthGuard: Redirecting to tabs - user authenticated');
         router.replace('/(tabs)');
       }
     }

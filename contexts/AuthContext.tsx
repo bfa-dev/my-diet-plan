@@ -98,6 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Clear all stored tokens
   const clearStoredTokens = async () => {
     try {
+      console.log('🧹 Clearing all stored tokens...');
       await removeStorageItem('supabase.auth.token');
       await removeStorageItem('mock.auth.session');
       await removeStorageItem('mock.auth.user');
@@ -106,11 +107,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         Object.keys(localStorage).forEach(key => {
           if (key.startsWith('sb-') || key.includes('supabase')) {
             localStorage.removeItem(key);
+            console.log(`🗑️ Removed localStorage key: ${key}`);
           }
         });
       }
+      console.log('✅ All tokens cleared successfully');
     } catch (error) {
-      console.warn('Error clearing stored tokens:', error);
+      console.warn('⚠️ Error clearing stored tokens:', error);
     }
   };
 
@@ -138,10 +141,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const mockSignOut = async () => {
-    console.log('Mock sign out - clearing state and storage');
+    console.log('🔧 Mock sign out - clearing state and storage');
+    
+    // Clear state immediately
     setSession(null);
     setUser(null);
+    
+    // Clear storage
     await clearStoredTokens();
+    
+    console.log('✅ Mock sign out completed');
   };
 
   // Check for stored mock session
@@ -178,14 +187,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const initializeAuth = async () => {
       try {
+        console.log('🔄 Initializing auth...');
+        
         if (!isSupabaseConfigured) {
           // Use mock authentication
           console.log('🔧 Using mock authentication for development');
           const hasMockSession = await checkMockSession();
           if (!hasMockSession) {
-            console.log('No valid mock session found, user needs to sign in');
+            console.log('❌ No valid mock session found, user needs to sign in');
           } else {
-            console.log('Valid mock session found, user is authenticated');
+            console.log('✅ Valid mock session found, user is authenticated');
           }
           setLoading(false);
           return;
@@ -197,23 +208,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         if (mounted) {
           if (error) {
-            console.warn('Error getting session:', error.message);
+            console.warn('⚠️ Error getting session:', error.message);
             await clearStoredTokens();
             setSession(null);
             setUser(null);
           } else if (session) {
-            console.log('Valid Supabase session found:', session.user?.email);
+            console.log('✅ Valid Supabase session found:', session.user?.email);
             setSession(session);
             setUser(session.user);
           } else {
-            console.log('No Supabase session found');
+            console.log('❌ No Supabase session found');
             setSession(null);
             setUser(null);
           }
           setLoading(false);
         }
       } catch (error) {
-        console.warn('Error in initializeAuth:', error);
+        console.warn('⚠️ Error in initializeAuth:', error);
         if (mounted) {
           await clearStoredTokens();
           setSession(null);
@@ -229,16 +240,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (isSupabaseConfigured) {
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
         async (event, session) => {
-          console.log('Auth state changed:', event, session?.user?.email);
+          console.log('🔄 Auth state changed:', event, session?.user?.email);
           
           if (mounted) {
             if (event === 'SIGNED_OUT' || !session) {
-              console.log('User signed out or session invalid');
+              console.log('🚪 User signed out or session invalid');
               setSession(null);
               setUser(null);
               await clearStoredTokens();
             } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-              console.log('User signed in or token refreshed');
+              console.log('🔑 User signed in or token refreshed');
               setSession(session);
               setUser(session?.user ?? null);
             }
@@ -260,45 +271,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithEmail = async (email: string, password: string) => {
     if (!isSupabaseConfigured) {
-      console.log('Mock sign in for:', email);
+      console.log('🔧 Mock sign in for:', email);
       return mockSignIn(email, password);
     }
 
     try {
-      console.log('Attempting Supabase sign in for:', email);
+      console.log('🔑 Attempting Supabase sign in for:', email);
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim().toLowerCase(),
         password,
       });
       
       if (error) {
-        console.warn('Supabase sign in error:', error.message);
+        console.warn('⚠️ Supabase sign in error:', error.message);
         return { error };
       }
       
       if (data.session && data.user) {
-        console.log('Supabase sign in successful:', data.user.email);
+        console.log('✅ Supabase sign in successful:', data.user.email);
         setSession(data.session);
         setUser(data.user);
         return { error: null };
       } else {
-        console.warn('Supabase sign in returned no session/user');
+        console.warn('⚠️ Supabase sign in returned no session/user');
         return { error: { message: 'No session returned from sign in' } };
       }
     } catch (error) {
-      console.warn('Unexpected error during sign in:', error);
+      console.warn('⚠️ Unexpected error during sign in:', error);
       return { error: { message: 'Unexpected error during sign in' } };
     }
   };
 
   const signUpWithEmail = async (email: string, password: string, metadata?: any) => {
     if (!isSupabaseConfigured) {
-      console.log('Mock sign up for:', email);
+      console.log('🔧 Mock sign up for:', email);
       return mockSignUp(email, password, metadata);
     }
 
     try {
-      console.log('Attempting Supabase sign up for:', email);
+      console.log('📝 Attempting Supabase sign up for:', email);
       const { data, error } = await supabase.auth.signUp({
         email: email.trim().toLowerCase(),
         password,
@@ -308,11 +319,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       
       if (error) {
-        console.warn('Supabase sign up error:', error.message);
+        console.warn('⚠️ Supabase sign up error:', error.message);
         return { error };
       }
 
-      console.log('Supabase sign up successful:', data.user?.email);
+      console.log('✅ Supabase sign up successful:', data.user?.email);
       
       // If user is immediately confirmed, set session
       if (data.session && data.user) {
@@ -322,7 +333,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       return { error: null };
     } catch (error) {
-      console.warn('Unexpected error during sign up:', error);
+      console.warn('⚠️ Unexpected error during sign up:', error);
       return { error: { message: 'Unexpected error during sign up' } };
     }
   };
@@ -353,43 +364,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
-      console.log('🚪 Starting sign out process...');
+      console.log('🚪 AuthContext: Starting sign out process...');
       
       if (!isSupabaseConfigured) {
-        console.log('Mock sign out');
+        console.log('🔧 AuthContext: Using mock sign out');
         await mockSignOut();
-        console.log('✅ Mock sign out completed');
+        console.log('✅ AuthContext: Mock sign out completed');
         return;
       }
 
-      // Clear local state first
-      console.log('Clearing local auth state...');
+      // For Supabase, clear local state first to ensure immediate UI update
+      console.log('🧹 AuthContext: Clearing local auth state...');
       setSession(null);
       setUser(null);
       
       // Clear stored tokens
-      console.log('Clearing stored tokens...');
+      console.log('🗑️ AuthContext: Clearing stored tokens...');
       await clearStoredTokens();
       
       // Sign out from Supabase
-      console.log('Signing out from Supabase...');
+      console.log('🔐 AuthContext: Signing out from Supabase...');
       const { error } = await supabase.auth.signOut();
       
       if (error) {
-        console.warn('⚠️ Error signing out from Supabase:', error);
+        console.warn('⚠️ AuthContext: Error signing out from Supabase:', error);
         // Don't throw error, local state is already cleared
       } else {
-        console.log('✅ Supabase sign out completed');
+        console.log('✅ AuthContext: Supabase sign out completed');
       }
       
-      console.log('✅ Sign out process completed successfully');
+      console.log('✅ AuthContext: Sign out process completed successfully');
     } catch (error) {
-      console.error('❌ Error in signOut:', error);
+      console.error('❌ AuthContext: Error in signOut:', error);
       // Even if there's an error, ensure local state is cleared
       setSession(null);
       setUser(null);
       await clearStoredTokens();
-      console.log('🧹 Local state cleared despite error');
+      console.log('🧹 AuthContext: Local state cleared despite error');
     }
   };
 
