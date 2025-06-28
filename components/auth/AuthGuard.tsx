@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useRouter, useSegments } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -13,7 +13,6 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const { isAuthenticated, needsOnboarding, loading } = useAuth();
   const router = useRouter();
   const segments = useSegments();
-  const [hasNavigated, setHasNavigated] = useState(false);
 
   useEffect(() => {
     if (loading) {
@@ -37,49 +36,34 @@ export function AuthGuard({ children }: AuthGuardProps) {
       inAuthGroup,
       inOnboardingGroup,
       inProtectedRoute,
-      loading,
-      hasNavigated
+      loading
     });
-
-    // Reset navigation flag when auth state changes
-    if (!loading) {
-      setHasNavigated(false);
-    }
 
     if (!isAuthenticated) {
       // User is not authenticated
-      if (inProtectedRoute && !hasNavigated) {
+      if (inProtectedRoute) {
         // Redirect to auth if trying to access protected routes
         console.log('🔄 AuthGuard: Redirecting to auth - user not authenticated');
-        setHasNavigated(true);
-        setTimeout(() => {
-          router.replace('/(auth)/welcome');
-        }, 100);
+        router.replace('/(auth)/welcome');
       }
     } else {
       // User is authenticated
       if (needsOnboarding) {
         // User needs to complete onboarding
-        if (!inOnboardingGroup && !hasNavigated) {
+        if (!inOnboardingGroup) {
           console.log('🔄 AuthGuard: Redirecting to onboarding - profile incomplete');
-          setHasNavigated(true);
-          setTimeout(() => {
-            router.replace('/onboarding');
-          }, 100);
+          router.replace('/onboarding');
         }
       } else {
         // User is fully set up
-        if ((inAuthGroup || inOnboardingGroup) && !hasNavigated) {
+        if (inAuthGroup || inOnboardingGroup) {
           // Redirect to main app if trying to access auth/onboarding routes
           console.log('🔄 AuthGuard: Redirecting to tabs - user fully authenticated');
-          setHasNavigated(true);
-          setTimeout(() => {
-            router.replace('/(tabs)');
-          }, 100);
+          router.replace('/(tabs)');
         }
       }
     }
-  }, [isAuthenticated, needsOnboarding, loading, segments, router, hasNavigated]);
+  }, [isAuthenticated, needsOnboarding, loading, segments, router]);
 
   if (loading) {
     return (
