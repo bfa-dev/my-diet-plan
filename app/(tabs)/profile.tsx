@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { User, CreditCard as Edit3, Crown, MessageCircle, Settings, LogOut, ArrowRight, Award, TrendingUp, Calendar } from 'lucide-react-native';
+import { User, CreditCard as Edit3, Crown, MessageCircle, Settings, LogOut, ArrowRight, Award, TrendingUp, Calendar, History } from 'lucide-react-native';
 import { mockUser } from '@/data/mockData';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -142,6 +142,26 @@ export default function ProfileTab() {
             <ArrowRight size={20} color="#F59E0B" />
           </TouchableOpacity>
         )}
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Beslenme Planları</Text>
+          
+          <ProfileOption
+            icon={History}
+            title="Geçmiş Planlarım"
+            subtitle="Eski planları görüntüle ve yeniden kullan"
+            onPress={() => router.push('/meal-history')}
+            color="#8FBC8F"
+          />
+          
+          <ProfileOption
+            icon={Calendar}
+            title="Plan Oluştur"
+            subtitle="Yeni kişiselleştirilmiş plan"
+            onPress={() => router.push('/plan-generator')}
+            color="#3B82F6"
+          />
+        </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Hesap Yönetimi</Text>
