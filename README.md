@@ -1,6 +1,22 @@
-# Diet Plan App - PostgreSQL Backend Integration
+# AI-Powered Diet Plan App - Gemini Integration
 
-A comprehensive nutrition planning app built with React Native, Expo Router, and Supabase PostgreSQL backend.
+A comprehensive nutrition planning app built with React Native, Expo Router, Supabase PostgreSQL backend, and Google Gemini AI for intelligent meal plan generation.
+
+## 🤖 AI Features
+
+### Google Gemini Integration
+- **Real AI-Powered Meal Plans**: Uses Google Gemini Pro to generate personalized meal plans
+- **Turkish & Mediterranean Cuisine**: AI specializes in Turkish and Mediterranean recipes
+- **Intelligent Recipe Creation**: Generates new recipes based on user preferences and dietary restrictions
+- **Fallback System**: Automatically falls back to rule-based generation if AI is unavailable
+- **Retry Logic**: Implements exponential backoff for reliable AI API calls
+
+### AI Capabilities
+- **Personalized Prompts**: Generates detailed prompts based on user profile, goals, and restrictions
+- **Nutritional Accuracy**: AI calculates calories and macros for each generated recipe
+- **Dietary Compliance**: Respects all dietary preferences (vegetarian, gluten-free, etc.)
+- **Cultural Authenticity**: Focuses on authentic Turkish and Mediterranean dishes
+- **Recipe Validation**: Validates AI-generated content before saving to database
 
 ## 🚀 Features
 
@@ -12,6 +28,7 @@ A comprehensive nutrition planning app built with React Native, Expo Router, and
 - **API endpoints** for all CRUD operations
 
 ### Core Functionality
+- **AI Meal Planning** with Google Gemini Pro
 - **User Profiles** with health metrics and goals
 - **Recipe Management** with nutrition information
 - **Meal Planning** with weekly schedules
@@ -20,7 +37,7 @@ A comprehensive nutrition planning app built with React Native, Expo Router, and
 
 ### Data Models
 - **Users/Profiles**: Personal information, health metrics, goals
-- **Recipes**: Detailed recipes with ingredients and nutrition
+- **Recipes**: Detailed recipes with ingredients and nutrition (AI-generated + curated)
 - **Meal Plans**: Weekly meal schedules linked to recipes
 
 ## 🛠 Tech Stack
@@ -37,6 +54,12 @@ A comprehensive nutrition planning app built with React Native, Expo Router, and
 - **Row Level Security** for data protection
 - **Real-time subscriptions**
 
+### AI Integration
+- **Google Gemini Pro** for meal plan generation
+- **Custom prompt engineering** for Turkish/Mediterranean cuisine
+- **Intelligent fallback** to rule-based generation
+- **Recipe validation** and nutritional analysis
+
 ### API Layer
 - **Custom API wrapper** with error handling
 - **Loading states** and optimistic updates
@@ -50,7 +73,9 @@ A comprehensive nutrition planning app built with React Native, Expo Router, and
 │   └── migrations/           # Database schema and seed data
 ├── lib/
 │   ├── api.ts               # API layer with all endpoints
-│   └── supabase.ts          # Supabase client configuration
+│   ├── supabase.ts          # Supabase client configuration
+│   ├── geminiApi.ts         # Google Gemini AI integration
+│   └── mealPlanGenerator.ts # AI + rule-based meal planning
 ├── hooks/
 │   └── useApi.ts            # Custom hooks for API calls
 ├── contexts/
@@ -58,6 +83,47 @@ A comprehensive nutrition planning app built with React Native, Expo Router, and
 ├── types/
 │   └── index.ts             # TypeScript type definitions
 └── app/                     # Expo Router pages
+```
+
+## 🤖 AI Configuration
+
+### Google Gemini Setup
+
+1. **Get Gemini API Key**
+   - Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
+   - Create a new API key for Gemini Pro
+   - Copy your API key
+
+2. **Configure Environment Variables**
+```bash
+# Add to your .env file
+EXPO_PUBLIC_GEMINI_API_KEY=your_gemini_api_key_here
+```
+
+3. **AI Features**
+   - ✅ Personalized meal plan generation
+   - ✅ Turkish & Mediterranean recipe creation
+   - ✅ Dietary restriction compliance
+   - ✅ Nutritional calculation
+   - ✅ Automatic fallback to rule-based generation
+
+### AI Prompt Engineering
+
+The app uses sophisticated prompt engineering to generate culturally authentic and nutritionally accurate meal plans:
+
+```typescript
+// Example prompt structure
+`Sen Türk ve Akdeniz mutfağı konusunda uzman bir diyetisyensin. 
+Aşağıdaki kullanıcı profili için 7 günlük kişiselleştirilmiş beslenme planı oluştur:
+
+KULLANICI PROFİLİ:
+- İsim: ${user.name}
+- Yaş: ${user.age}
+- Hedef: ${goalDescription}
+- Beslenme Kısıtlamaları: ${dietaryRestrictions}
+
+HEDEF KALORI: ${targetCalories} kcal/gün
+...`
 ```
 
 ## 🗄️ Database Schema
@@ -110,6 +176,7 @@ A comprehensive nutrition planning app built with React Native, Expo Router, and
 - **Secure authentication** with Supabase Auth
 - **Token-based API authentication**
 - **Input validation** and sanitization
+- **AI response validation** and sanitization
 
 ## 🚀 Getting Started
 
@@ -117,6 +184,7 @@ A comprehensive nutrition planning app built with React Native, Expo Router, and
 - Node.js 18+
 - Expo CLI
 - Supabase account
+- Google Gemini API key (optional, for AI features)
 
 ### Setup
 
@@ -140,16 +208,38 @@ npm install
 ```bash
 cp .env.example .env
 ```
-Fill in your Supabase credentials:
+Fill in your credentials:
 ```
 EXPO_PUBLIC_SUPABASE_URL=your_supabase_project_url
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+EXPO_PUBLIC_GEMINI_API_KEY=your_gemini_api_key
 ```
 
 5. **Start the development server**
 ```bash
 npm run dev
 ```
+
+## 🤖 AI Usage
+
+### Meal Plan Generation
+```typescript
+import { mealPlanApi } from '@/lib/api';
+
+// Generate AI-powered meal plan
+const { data, error } = await mealPlanApi.generatePersonalizedPlan(
+  userId,
+  mealCount, // 3 or 4 meals per day
+  forceRefresh // true for premium users
+);
+```
+
+### AI Features
+- **Automatic Recipe Creation**: AI generates new recipes based on user preferences
+- **Nutritional Accuracy**: Each recipe includes calculated calories and macros
+- **Cultural Authenticity**: Focuses on Turkish and Mediterranean cuisine
+- **Dietary Compliance**: Respects all dietary restrictions and preferences
+- **Intelligent Fallback**: Uses rule-based generation if AI is unavailable
 
 ## 📱 API Usage
 
@@ -168,7 +258,7 @@ const { data, error } = await profileApi.updateProfile(userId, updates);
 ```typescript
 import { recipeApi } from '@/lib/api';
 
-// Get all recipes
+// Get all recipes (includes AI-generated)
 const { data, error } = await recipeApi.getAllRecipes();
 
 // Get recipe by ID
@@ -182,13 +272,18 @@ import { mealPlanApi } from '@/lib/api';
 // Get user meal plans
 const { data, error } = await mealPlanApi.getUserMealPlans(userId);
 
-// Create new meal plan
-const { data, error } = await mealPlanApi.createMealPlan(userId, mealPlan);
+// Generate AI meal plan
+const { data, error } = await mealPlanApi.generatePersonalizedPlan(userId, 3);
 ```
 
 ## 🔄 Development Mode
 
-The app automatically falls back to mock data when Supabase is not configured, allowing for seamless development without a backend connection.
+The app automatically falls back to rule-based meal planning when:
+- Gemini API key is not configured
+- AI API calls fail or timeout
+- Network connectivity issues
+
+This ensures the app remains functional even without AI integration.
 
 ## 🚀 Deployment
 
@@ -200,7 +295,13 @@ The app automatically falls back to mock data when Supabase is not configured, a
 ### Frontend Deployment
 1. Build the app: `npm run build:web`
 2. Deploy to your preferred hosting platform
-3. Configure environment variables
+3. Configure environment variables including Gemini API key
+
+### AI Configuration
+1. Ensure Gemini API key is properly configured
+2. Test AI meal plan generation
+3. Monitor API usage and costs
+4. Set up error monitoring for AI failures
 
 ## 🤝 Contributing
 
@@ -208,8 +309,16 @@ The app automatically falls back to mock data when Supabase is not configured, a
 2. Create a feature branch
 3. Make your changes
 4. Add tests if applicable
-5. Submit a pull request
+5. Test AI integration if modifying AI features
+6. Submit a pull request
 
 ## 📄 License
 
 This project is licensed under the MIT License.
+
+## 🔗 Resources
+
+- [Google Gemini API Documentation](https://ai.google.dev/docs)
+- [Supabase Documentation](https://supabase.com/docs)
+- [Expo Router Documentation](https://expo.github.io/router/)
+- [React Native Documentation](https://reactnative.dev/)

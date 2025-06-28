@@ -338,6 +338,123 @@ export const recipeApi = {
       return { data: null, error: 'Failed to fetch recipes' };
     }
   },
+
+  async createRecipe(recipe: Omit<Recipe, 'recipeID'>): Promise<ApiResponse<Recipe>> {
+    if (!isSupabaseConfigured) {
+      // Return mock success for development
+      const mockRecipe: Recipe = {
+        recipeID: `mock-recipe-${Date.now()}`,
+        ...recipe,
+      };
+      return { data: mockRecipe, error: null };
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('recipes')
+        .insert({
+          title: recipe.title,
+          description: recipe.description,
+          cuisine_type: recipe.cuisineType,
+          photo_url: recipe.photoURL,
+          prep_time_minutes: recipe.prepTime_minutes,
+          cook_time_minutes: recipe.cookTime_minutes,
+          calories: recipe.calories,
+          protein_grams: recipe.protein_grams,
+          carbs_grams: recipe.carbs_grams,
+          fat_grams: recipe.fat_grams,
+          ingredients: recipe.ingredients,
+          instructions: recipe.instructions,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating recipe:', error);
+        return { data: null, error: error.message };
+      }
+
+      // Transform response to Recipe type
+      const createdRecipe: Recipe = {
+        recipeID: data.id,
+        title: data.title,
+        description: data.description || '',
+        cuisineType: data.cuisine_type || 'International',
+        photoURL: data.photo_url || '',
+        prepTime_minutes: data.prep_time_minutes || 0,
+        cookTime_minutes: data.cook_time_minutes || 0,
+        calories: data.calories || 0,
+        protein_grams: data.protein_grams || 0,
+        carbs_grams: data.carbs_grams || 0,
+        fat_grams: data.fat_grams || 0,
+        ingredients: data.ingredients || [],
+        instructions: data.instructions || [],
+      };
+
+      return { data: createdRecipe, error: null };
+    } catch (error) {
+      console.error('Unexpected error creating recipe:', error);
+      return { data: null, error: 'Failed to create recipe' };
+    }
+  },
+
+  async createMultipleRecipes(recipes: Omit<Recipe, 'recipeID'>[]): Promise<ApiResponse<Recipe[]>> {
+    if (!isSupabaseConfigured) {
+      // Return mock success for development
+      const mockRecipes: Recipe[] = recipes.map((recipe, index) => ({
+        recipeID: `mock-recipe-${Date.now()}-${index}`,
+        ...recipe,
+      }));
+      return { data: mockRecipes, error: null };
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('recipes')
+        .insert(recipes.map(recipe => ({
+          title: recipe.title,
+          description: recipe.description,
+          cuisine_type: recipe.cuisineType,
+          photo_url: recipe.photoURL,
+          prep_time_minutes: recipe.prepTime_minutes,
+          cook_time_minutes: recipe.cookTime_minutes,
+          calories: recipe.calories,
+          protein_grams: recipe.protein_grams,
+          carbs_grams: recipe.carbs_grams,
+          fat_grams: recipe.fat_grams,
+          ingredients: recipe.ingredients,
+          instructions: recipe.instructions,
+        })))
+        .select();
+
+      if (error) {
+        console.error('Error creating recipes:', error);
+        return { data: null, error: error.message };
+      }
+
+      // Transform response to Recipe type
+      const createdRecipes: Recipe[] = data.map(recipe => ({
+        recipeID: recipe.id,
+        title: recipe.title,
+        description: recipe.description || '',
+        cuisineType: recipe.cuisine_type || 'International',
+        photoURL: recipe.photo_url || '',
+        prepTime_minutes: recipe.prep_time_minutes || 0,
+        cookTime_minutes: recipe.cook_time_minutes || 0,
+        calories: recipe.calories || 0,
+        protein_grams: recipe.protein_grams || 0,
+        carbs_grams: recipe.carbs_grams || 0,
+        fat_grams: recipe.fat_grams || 0,
+        ingredients: recipe.ingredients || [],
+        instructions: recipe.instructions || [],
+      }));
+
+      return { data: createdRecipes, error: null };
+    } catch (error) {
+      console.error('Unexpected error creating recipes:', error);
+      return { data: null, error: 'Failed to create recipes' };
+    }
+  },
 };
 
 // Meal Plan API
@@ -499,6 +616,8 @@ export const mealPlanApi = {
     forceRefresh: boolean = false
   ): Promise<ApiResponse<MealPlan>> {
     try {
+      console.log('🚀 Starting AI-powered meal plan generation...');
+      
       // Check if user is premium for refresh capability
       const { data: user, error: userError } = await profileApi.getProfile(userId);
       if (userError || !user) {
@@ -513,20 +632,50 @@ export const mealPlanApi = {
         }
       }
 
-      // Get all recipes
-      const { data: recipes, error: recipesError } = await recipeApi.getAllRecipes();
-      if (recipesError || !recipes) {
-        return { data: null, error: recipesError || 'Failed to fetch recipes' };
+      // Get existing recipes from database
+      const { data: existingRecipes, error: recipesError } = await recipeApi.getAllRecipes();
+      if (recipesError) {
+        console.warn('Could not fetch existing recipes, using empty array:', recipesError);
       }
 
-      // Generate personalized meal plan
-      const dailyMeals = await generatePersonalizedMealPlan(user, recipes, mealCount);
+      // Generate personalized meal plan with AI
+      console.log('🤖 Generating meal plan with AI...');
+      const { recipes: newRecipes, dailyMeals } = await generatePersonalizedMealPlan(
+        user, 
+        existingRecipes || [], 
+        mealCount
+      );
+
+      // If we have new recipes from AI, save them to database
+      if (newRecipes.length > 0) {
+        console.log(`💾 Saving ${newRecipes.length} new recipes to database...`);
+        
+        // Filter out recipes that might already exist (by title)
+        const existingTitles = new Set((existingRecipes || []).map(r => r.title.toLowerCase()));
+        const uniqueNewRecipes = newRecipes.filter(r => !existingTitles.has(r.title.toLowerCase()));
+        
+        if (uniqueNewRecipes.length > 0) {
+          const { error: createRecipesError } = await recipeApi.createMultipleRecipes(
+            uniqueNewRecipes.map(({ recipeID, ...recipe }) => recipe)
+          );
+          
+          if (createRecipesError) {
+            console.warn('Failed to save new recipes to database:', createRecipesError);
+            // Continue anyway with the generated plan
+          } else {
+            console.log(`✅ Successfully saved ${uniqueNewRecipes.length} new recipes`);
+          }
+        }
+      }
 
       // Validate the meal plan
-      const validation = validateMealPlan(user, dailyMeals, recipes);
+      const allRecipes = [...(existingRecipes || []), ...newRecipes];
+      const validation = validateMealPlan(user, dailyMeals, allRecipes);
       if (!validation.isValid) {
-        console.warn('Generated meal plan has issues:', validation.issues);
+        console.warn('⚠️ Generated meal plan has issues:', validation.issues);
         // Continue anyway, but log the issues
+      } else {
+        console.log('✅ Meal plan validation passed');
       }
 
       // Create date range (7 days starting from today)
@@ -540,9 +689,16 @@ export const mealPlanApi = {
         dailyMeals,
       };
 
-      return await this.createMealPlan(userId, mealPlanData);
+      console.log('💾 Saving meal plan to database...');
+      const result = await this.createMealPlan(userId, mealPlanData);
+      
+      if (result.data) {
+        console.log('✅ AI-powered meal plan generated and saved successfully!');
+      }
+      
+      return result;
     } catch (error) {
-      console.error('Error generating personalized meal plan:', error);
+      console.error('❌ Error generating personalized meal plan:', error);
       return { data: null, error: 'Failed to generate meal plan' };
     }
   },
@@ -597,19 +753,19 @@ export const authApi = {
     
     // If profile update is successful and user has complete profile, generate meal plan
     if (result.data && result.data.name && result.data.age && result.data.weight_kg) {
-      console.log('Profile complete, generating initial meal plan...');
+      console.log('✅ Profile complete, generating initial AI meal plan...');
       
       // Generate initial meal plan in the background
       mealPlanApi.generatePersonalizedPlan(userId, 3, false)
         .then(({ data, error }) => {
           if (error) {
-            console.warn('Failed to generate initial meal plan:', error);
+            console.warn('⚠️ Failed to generate initial meal plan:', error);
           } else {
-            console.log('Initial meal plan generated successfully');
+            console.log('🎉 Initial AI meal plan generated successfully');
           }
         })
         .catch(error => {
-          console.warn('Error generating initial meal plan:', error);
+          console.warn('⚠️ Error generating initial meal plan:', error);
         });
     }
     

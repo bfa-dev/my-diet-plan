@@ -2,12 +2,13 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'rea
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Sparkles, Target, Calendar, Users, Crown } from 'lucide-react-native';
+import { ArrowLeft, Sparkles, Target, Calendar, Users, Crown, Zap } from 'lucide-react-native';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useAuth } from '@/contexts/AuthContext';
 import { mealPlanApi } from '@/lib/api';
+import { isGeminiConfigured } from '@/lib/geminiApi';
 
 export default function PlanGenerator() {
   const router = useRouter();
@@ -60,6 +61,8 @@ export default function PlanGenerator() {
     setIsGenerating(true);
     
     try {
+      console.log('🚀 Starting AI meal plan generation...');
+      
       const { data, error } = await mealPlanApi.generatePersonalizedPlan(
         user.id,
         parseInt(selectedMealCount),
@@ -67,19 +70,23 @@ export default function PlanGenerator() {
       );
 
       if (error) {
+        console.error('❌ Meal plan generation failed:', error);
         Alert.alert('Hata', error);
         return;
       }
 
       if (data) {
+        console.log('🎉 Meal plan generated successfully!');
         Alert.alert(
           'Başarılı!',
-          'Kişiselleştirilmiş beslenme planınız oluşturuldu!',
+          isGeminiConfigured 
+            ? 'AI ile kişiselleştirilmiş beslenme planınız oluşturuldu!' 
+            : 'Kişiselleştirilmiş beslenme planınız oluşturuldu!',
           [{ text: 'Planımı Gör', onPress: () => router.replace('/(tabs)') }]
         );
       }
     } catch (error) {
-      console.error('Error generating plan:', error);
+      console.error('❌ Error generating plan:', error);
       Alert.alert('Hata', 'Plan oluşturulurken bir hata oluştu');
     } finally {
       setIsGenerating(false);
@@ -93,15 +100,23 @@ export default function PlanGenerator() {
           <View style={styles.loadingContent}>
             <Sparkles size={48} color="#8FBC8F" />
             <LoadingSpinner size={32} color="#8FBC8F" />
-            <Text style={styles.loadingTitle}>Planınız Hazırlanıyor...</Text>
+            <Text style={styles.loadingTitle}>
+              {isGeminiConfigured ? 'AI ile Planınız Hazırlanıyor...' : 'Planınız Hazırlanıyor...'}
+            </Text>
             <Text style={styles.loadingSubtitle}>
-              AI teknolojisi ile size özel beslenme planı oluşturuluyor
+              {isGeminiConfigured 
+                ? 'Google Gemini AI teknolojisi ile size özel beslenme planı oluşturuluyor'
+                : 'Size özel beslenme planı oluşturuluyor'
+              }
             </Text>
             <View style={styles.loadingSteps}>
               <Text style={styles.loadingStep}>✓ Hedefleriniz analiz ediliyor</Text>
               <Text style={styles.loadingStep}>✓ Kalori ihtiyacınız hesaplanıyor</Text>
               <Text style={styles.loadingStep}>✓ Diyet tercihleriniz filtreleniyor</Text>
-              <Text style={styles.loadingStep}>⏳ Tarifler seçiliyor ve planlanıyor</Text>
+              {isGeminiConfigured && (
+                <Text style={styles.loadingStep}>⏳ AI ile tarifler oluşturuluyor</Text>
+              )}
+              <Text style={styles.loadingStep}>⏳ Plan optimize ediliyor</Text>
             </View>
           </View>
         </View>
@@ -121,11 +136,25 @@ export default function PlanGenerator() {
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.heroSection}>
-          <Sparkles size={32} color="#8FBC8F" />
-          <Text style={styles.heroTitle}>AI ile Kişisel Plan</Text>
-          <Text style={styles.heroSubtitle}>
-            Hedeflerinize uygun, size özel beslenme planı oluşturalım
+          <View style={styles.heroIconContainer}>
+            <Sparkles size={32} color="#8FBC8F" />
+            {isGeminiConfigured && <Zap size={20} color="#F59E0B" style={styles.aiIcon} />}
+          </View>
+          <Text style={styles.heroTitle}>
+            {isGeminiConfigured ? 'AI ile Kişisel Plan' : 'Kişisel Plan'}
           </Text>
+          <Text style={styles.heroSubtitle}>
+            {isGeminiConfigured 
+              ? 'Google Gemini AI ile hedeflerinize uygun, size özel beslenme planı oluşturalım'
+              : 'Hedeflerinize uygun, size özel beslenme planı oluşturalım'
+            }
+          </Text>
+          {isGeminiConfigured && (
+            <View style={styles.aiFeatureBadge}>
+              <Zap size={16} color="#F59E0B" />
+              <Text style={styles.aiFeatureText}>Google Gemini AI Destekli</Text>
+            </View>
+          )}
         </View>
 
         {userProfile && (
@@ -281,17 +310,29 @@ export default function PlanGenerator() {
             </Text>
           </Card>
         )}
+
+        {!isGeminiConfigured && (
+          <Card style={styles.configNotice}>
+            <View style={styles.configHeader}>
+              <Zap size={20} color="#3B82F6" />
+              <Text style={styles.configTitle}>AI Özelliği</Text>
+            </View>
+            <Text style={styles.configText}>
+              Google Gemini AI entegrasyonu için API anahtarı gereklidir. Şu anda kural tabanlı plan oluşturma kullanılıyor.
+            </Text>
+          </Card>
+        )}
       </ScrollView>
 
       <View style={styles.footer}>
         <Button
-          title="Planımı Oluştur"
+          title={isGeminiConfigured ? "AI ile Planımı Oluştur" : "Planımı Oluştur"}
           onPress={generatePlan}
           disabled={!selectedGoal}
           style={styles.generateButton}
         />
         <Text style={styles.footerNote}>
-          Plan oluşturma işlemi yaklaşık 30 saniye sürer
+          Plan oluşturma işlemi {isGeminiConfigured ? '30-60' : '5-10'} saniye sürer
         </Text>
       </View>
     </SafeAreaView>
@@ -324,12 +365,21 @@ const styles = StyleSheet.create({
   heroSection: {
     alignItems: 'center',
     paddingVertical: 32,
+    position: 'relative',
+  },
+  heroIconContainer: {
+    position: 'relative',
+    marginBottom: 16,
+  },
+  aiIcon: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
   },
   heroTitle: {
     fontSize: 24,
     fontFamily: 'Inter-Bold',
     color: '#1F2937',
-    marginTop: 16,
     marginBottom: 8,
   },
   heroSubtitle: {
@@ -338,6 +388,23 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     textAlign: 'center',
     lineHeight: 24,
+    marginBottom: 16,
+  },
+  aiFeatureBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+  },
+  aiFeatureText: {
+    fontSize: 12,
+    fontFamily: 'Inter-SemiBold',
+    color: '#F59E0B',
   },
   profileCard: {
     padding: 20,
@@ -505,6 +572,30 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Inter-Regular',
     color: '#92400E',
+    lineHeight: 18,
+  },
+  configNotice: {
+    padding: 16,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    marginBottom: 24,
+  },
+  configHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  configTitle: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#3B82F6',
+  },
+  configText: {
+    fontSize: 13,
+    fontFamily: 'Inter-Regular',
+    color: '#1E40AF',
     lineHeight: 18,
   },
   footer: {

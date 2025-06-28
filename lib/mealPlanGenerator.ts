@@ -1,4 +1,9 @@
 import { Recipe, User, DailyMeal } from '@/types';
+import { 
+  generateMealPlanWithRetry, 
+  convertGeminiMealPlanToAppFormat, 
+  isGeminiConfigured 
+} from './geminiApi';
 
 // Calorie calculation using Mifflin-St Jeor equation
 export const calculateDailyCalories = (user: User): number => {
@@ -188,12 +193,51 @@ export const categorizeRecipesByMeal = (recipes: Recipe[]) => {
   return { breakfast, lunch, dinner, snacks };
 };
 
-// Generate balanced meal plan
+// Generate balanced meal plan using AI or fallback to rule-based
 export const generatePersonalizedMealPlan = async (
   user: User, 
-  recipes: Recipe[],
+  existingRecipes: Recipe[],
   mealCount: number = 3 // 3 or 4 meals per day
-): Promise<DailyMeal[]> => {
+): Promise<{ recipes: Recipe[]; dailyMeals: DailyMeal[] }> => {
+  const targetCalories = calculateDailyCalories(user);
+  
+  console.log('🤖 Attempting to generate meal plan with Gemini AI...');
+  
+  // Try to generate with Gemini AI first
+  if (isGeminiConfigured) {
+    try {
+      const { data: geminiPlan, error } = await generateMealPlanWithRetry(
+        user, 
+        targetCalories, 
+        mealCount,
+        2 // Max 2 retries
+      );
+
+      if (geminiPlan && !error) {
+        console.log('✅ Successfully generated meal plan with Gemini AI');
+        const { recipes, dailyMeals } = await convertGeminiMealPlanToAppFormat(geminiPlan, user.userID);
+        return { recipes, dailyMeals };
+      } else {
+        console.warn('⚠️ Gemini AI failed, falling back to rule-based generation:', error);
+      }
+    } catch (error) {
+      console.warn('⚠️ Gemini AI error, falling back to rule-based generation:', error);
+    }
+  } else {
+    console.log('🔧 Gemini not configured, using rule-based generation');
+  }
+
+  // Fallback to rule-based generation
+  console.log('🔄 Generating meal plan with rule-based algorithm...');
+  return generateRuleBasedMealPlan(user, existingRecipes, mealCount);
+};
+
+// Fallback rule-based meal plan generation
+const generateRuleBasedMealPlan = async (
+  user: User, 
+  recipes: Recipe[],
+  mealCount: number = 3
+): Promise<{ recipes: Recipe[]; dailyMeals: DailyMeal[] }> => {
   const targetCalories = calculateDailyCalories(user);
   const macroTargets = calculateMacroTargets(user, targetCalories);
   
@@ -253,7 +297,7 @@ export const generatePersonalizedMealPlan = async (
     });
   }
 
-  return dailyMeals;
+  return { recipes: filteredRecipes, dailyMeals };
 };
 
 // Select the best recipe based on target calories
